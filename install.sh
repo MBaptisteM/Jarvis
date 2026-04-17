@@ -46,6 +46,7 @@ $SUDO cp completion/jarvis.bash "$COMP_PATH/jarvis"
 $SUDO chmod +x "$BIN_PATH/jarvis"
 $SUDO chmod +x "$LIB_PATH"/*
 
+
 echo "Installation complete !"
 
 
@@ -58,3 +59,7 @@ if [[ "$BIN_PATH" == "$HOME/.local/bin" ]]; then
 else
     echo "You can use: jarvis"
 fi
+
+echo ""
+echo "To enable auto completion restart your terminal or run:"
+echo "source /etc/bash_completion"
