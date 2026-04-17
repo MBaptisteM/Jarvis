@@ -14,7 +14,7 @@ int main(int argc, char* argv[]){
         if (access(help_path, X_OK) != 0)  
             errx(EXIT_FAILURE, "ERROR you need to select a command and command %s not found", COMMAND_HELP);
 
-        printf("ERROR you need to select a command, this is the list of all jarvis commands :\n");
+        printf("ERROR you need to select a command\n");
 
         char *default_args[] = {COMMAND_HELP, NULL};
         execvp(help_path, default_args);
