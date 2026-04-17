@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -e
+
+echo "Uninstalling Jarvis..."
+
+
+if [ "$EUID" -eq 0 ]; then
+    echo "Uninstalling as root..."
+
+    BIN_PATH="/usr/local/bin/jarvis"
+    LIB_PATH="/usr/local/lib/jarvis"
+    COMP_PATH="/etc/bash_completion.d/jarvis"
+    SUDO=""
+
+elif command -v sudo >/dev/null 2>&1; then
+    echo "Uninstalling with sudo..."
+
+    BIN_PATH="/usr/local/bin/jarvis"
+    LIB_PATH="/usr/local/lib/jarvis"
+    COMP_PATH="/etc/bash_completion.d/jarvis"
+    SUDO="sudo"
+
+else
+    echo "Uninstalling locally..."
+
+    BIN_PATH="$HOME/.local/bin/jarvis"
+    LIB_PATH="$HOME/.local/lib/jarvis"
+    COMP_PATH="$HOME/.local/share/bash-completion/completions/jarvis"
+    SUDO=""
+fi
+
+
+echo ""
+echo "This action will remove:"
+echo "  - $BIN_PATH"
+echo "  - $LIB_PATH"
+echo "  - $COMP_PATH"
+echo ""
+
+read -p "Are you sure you want to uninstall Jarvis? (y/N): " confirm
+
+if [[ "$confirm" != "y" && "$confirm" != "Y" 
+    && "$confirm" != "Yes" && "$confirm" != "yes" 
+    && "$confirm" != "YES" ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+$SUDO rm -f "$BIN_PATH"
+$SUDO rm -rf "$LIB_PATH"
+$SUDO rm -f "$COMP_PATH"
+
+echo ""
+echo "Jarvis has been uninstalled with success."

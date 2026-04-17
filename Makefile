@@ -19,7 +19,7 @@ CMD_BINS = $(patsubst $(CMD_SRC_PATH)/%.c,$(CMD_PATH)/%,$(CMD_SRCS))
 all: $(MAIN_BIN) $(CMD_BINS)
 
 
-$(MAIN_BIN): $(MAIN_SRC)
+$(MAIN_BIN): $(MAIN_SRC) $(SRC_PATH)/main.h
 	mkdir -p $(BIN_PATH)
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -29,6 +29,7 @@ $(CMD_PATH)/%: $(CMD_SRC_PATH)/%.c
 
 
 clean:
-	rm -rf $(BIN_PATH)/* $(CMD_PATH)/*
+	rm -f $(MAIN_BIN)
+	rm -f $(CMD_BINS)
 
 .PHONY: all clean
