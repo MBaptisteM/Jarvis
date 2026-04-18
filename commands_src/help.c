@@ -10,7 +10,7 @@ int main(){
     // clone
     printf("->clone\n");
     printf("\tdescription\n");
-    printf("\tExample : jarvis clone <clone link>\n\n");
+    printf("\tExample : jarvis clone <git remote>\n\n");
 
     // uninstall
     printf("->uninstall\n");
