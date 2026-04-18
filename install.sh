@@ -51,15 +51,15 @@ echo "Installation complete !"
 
 
 if [[ "$BIN_PATH" == "$HOME/.local/bin" ]]; then
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        echo ""
-        echo "Jarvis may not work if you do not Add this to your ~/.bashrc :"
-        echo 'export PATH="$HOME/.local/bin:$PATH"'
+    if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.bashrc"; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        echo "Added ~/.local/bin to PATH in ~/.bashrc"
     fi
+
+    source ~/.bashrc
+    source "$HOME/.local/share/bash-completion/completions/jarvis"
 else
+    exec bash
+
     echo "You can use: jarvis"
 fi
-
-echo ""
-echo "To enable auto completion restart your terminal or run:"
-echo "source /etc/bash_completion"
