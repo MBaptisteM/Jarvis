@@ -7,8 +7,15 @@ int main(){
     // command 1
     printf("test1\n\n");
 
-    // command 2
-    printf("test2\n");
+    // clone
+    printf("->clone\n");
+    printf("\tdescription\n");
+    printf("\tExample : jarvis clone <clone link>\n\n");
+
+    // uninstall
+    printf("->uninstall\n");
+    printf("\tTool to uninstall jarvis, there is no parameter to add\n");
+    printf("\tExample : jarvis uninstall\n");
 
     return EXIT_SUCCESS;
 }
