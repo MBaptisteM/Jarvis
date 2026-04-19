@@ -37,6 +37,8 @@ $SUDO mkdir -p "$BIN_PATH"
 $SUDO mkdir -p "$LIB_PATH"
 $SUDO mkdir -p "$COMP_PATH"
 
+$SUDO mkdir -p "$HOME/.jarvis"
+
 
 $SUDO cp bin/jarvis "$BIN_PATH/"
 $SUDO cp -r commands/* "$LIB_PATH/"

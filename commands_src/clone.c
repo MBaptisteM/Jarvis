@@ -5,6 +5,11 @@
 
 // baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/
 // epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
+
+// Créer un fichier jarvis (qui sert de repere pour connaitre la base)
+// Stocker l'avancée de chaque push des repos
+// Stocker le chemin vers ce fichier dans un autre fichier dont je connais toujours l'emplacement
+
 int main(int argc, char* argv[]){
     // Check if there is a git remote
     if (argc < 2)
