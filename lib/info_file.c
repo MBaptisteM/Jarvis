@@ -52,19 +52,7 @@ int CreateInfoFile(){
 }
 
 
-int SetMainFolderPath(char* main_folder_path, size_t size){
-
-    // Add '\n' at the end of main_folder_path if necessary
-    if (main_folder_path[size - 2] != '\n'){
-        size ++;
-        main_folder_path = realloc(main_folder_path, size);
-        
-        main_folder_path[size - 2] = '\n';
-        main_folder_path[size - 1] = '\0';
-    }
-
-    printf("%s",main_folder_path);
-
+int SetMainFolderPath(char* main_folder_path){
 
     // Put main_folder_path at the begining of file
     char* info_file_full_path = GetInfoFullPath();
@@ -90,13 +78,13 @@ int SetMainFolderPath(char* main_folder_path, size_t size){
 
     while (fgets(buffer, sizeof(buffer), info_file)) {
         if (is_first_line) {
-            fprintf(new_file, "%s", main_folder_path);
+            fprintf(new_file, "%s\n", main_folder_path);
         } else {
             fputs(buffer, new_file);
         }
     }
     if (is_first_line)
-        fprintf(new_file, "%s", main_folder_path);
+        fprintf(new_file, "%s\n", main_folder_path);
 
     fclose(info_file);
     fclose(new_file);

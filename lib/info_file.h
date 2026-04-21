@@ -10,7 +10,7 @@
 
 int GetAbsolutePath(char *main_folder_path);
 int CreateInfoFile();
-int SetMainFolderPath(char* main_folder_path, size_t size);
+int SetMainFolderPath(char* main_folder_path);
 char *GetInfoFullPath();
 
 /*  Info file structure :

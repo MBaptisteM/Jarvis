@@ -15,3 +15,4 @@
 int IsEpitaRepo(char* repo_name);
 char** GetRelavitvePath(char *repo_name, size_t *size);
 char* GetOrCreateMainFolderPath();
+int OneLayerFindOrCreate(char *path, char *name, int is_folder);

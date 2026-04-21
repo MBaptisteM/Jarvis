@@ -23,7 +23,7 @@ int main(int argc, char* argv[]){
         return EXIT_SUCCESS;
     }
 
-
+    /*
     size_t size_relative_path;
     char** relative_path = GetRelavitvePath(argv[1], &size_relative_path);
     for (size_t i = 0; i < size_relative_path; i++){
@@ -33,7 +33,6 @@ int main(int argc, char* argv[]){
     printf("\n");
 
     free(relative_path);
-    //free(size_relative_path);
 
     char* main_folder_path = GetOrCreateMainFolderPath();
     if (main_folder_path == NULL)
@@ -41,6 +40,49 @@ int main(int argc, char* argv[]){
 
     printf("path main folder : %s\n", main_folder_path);
     free(main_folder_path);
+    */
+    
+
+    char* main_folder_path = GetOrCreateMainFolderPath();
+    if (main_folder_path == NULL)
+        return EXIT_FAILURE;
+
+    size_t size_relative_path;
+    char** relative_path = GetRelavitvePath(argv[1], &size_relative_path);
+
+
+    size_t size_main_folder_path = strlen(main_folder_path);
+
+    for (size_t i = 0; i < size_relative_path; i++){
+        if (OneLayerFindOrCreate(main_folder_path, relative_path[i], 1)){
+            errx( EXIT_FAILURE, "ERROR Impossible to find or create te folder : %s%s", 
+                                main_folder_path, relative_path[i]);
+        }
+
+        size_t size_full_path = size_main_folder_path + strlen(relative_path[i]) + 2;
+        main_folder_path = realloc(main_folder_path, size_full_path);
+        if (main_folder_path == NULL)
+            errx(EXIT_FAILURE, "ERROR Impossible to allocate memory, not enough space. (Try to rerun)");
+        
+        size_t j = 0;
+        while (relative_path[i][j] != '\0'){
+            main_folder_path[size_main_folder_path + j] = relative_path[i][j];
+            j++;
+        }
+        main_folder_path[size_main_folder_path + j] = '/';
+        main_folder_path[size_main_folder_path + j + 1] = '\0';
+
+        free(relative_path[i]);
+        size_main_folder_path = size_full_path;
+        
+    }
+    free(relative_path);
+
+    free(main_folder_path);
+
+    // strlen()
+
+
 
     // Chercher les dossiers dans l'arborescence
     // Créer les dossiers si ils n'existent pas -> aller dedans sinon
@@ -106,6 +148,8 @@ char** GetRelavitvePath(char *repo_name, size_t *size){
     return relative_path;
 }
 
+// Get the path to the main folder or create it
+// Example : ~/Jarvis/TPs/
 char* GetOrCreateMainFolderPath(){
     char* main_folder_path = malloc(SIZE_OF_STRING);
 
@@ -129,16 +173,16 @@ char* GetOrCreateMainFolderPath(){
         while (MAIN_FOLDER[main_folder_size])
             main_folder_size++;
 
-        size_t total_size = path_size + main_folder_size + 2;
+        size_t total_size = path_size + main_folder_size + 3;
 
         path = realloc(path, total_size);
 
         char* final_path = malloc(total_size);
-        snprintf(final_path, total_size, "%s/%s", path, MAIN_FOLDER);
+        snprintf(final_path, total_size, "%s/%s/", path, MAIN_FOLDER);
 
         free(path);
         
-        SetMainFolderPath(final_path, total_size);
+        SetMainFolderPath(final_path);
 
         return final_path;
     }
@@ -148,7 +192,7 @@ char* GetOrCreateMainFolderPath(){
 
 
 // Find a file or find or create a folder -> 0 if found / 1 if not found
-int OneLayerFind(char *path, char *name, int is_folder){
+int OneLayerFindOrCreate(char *path, char *name, int is_folder){
     
     // Open the current directory
     DIR *dir;
@@ -160,19 +204,19 @@ int OneLayerFind(char *path, char *name, int is_folder){
     if (dir == NULL)
         return EXIT_FAILURE;
 
-    // Iterate throw all files and check if they are what we are looking for
+    // Iterate trough all files and check if they are what we are looking for
     while ((file = readdir(dir)) != NULL) {
         if (stat(file->d_name, &info) == 0) {
             if (S_ISDIR(info.st_mode) && is_folder) {
                 // Folder case
-                if (strcmp(name, file->d_name)){
+                if (strcmp(name, file->d_name) == 0){
                     closedir(dir);
                     return EXIT_SUCCESS;
                 }
             }
             else if (!is_folder){
                 // Not a folder case
-                if (strcmp(name, file->d_name)){
+                if (strcmp(name, file->d_name) == 0){
                     closedir(dir);
                     return EXIT_SUCCESS;
                 }
@@ -181,9 +225,15 @@ int OneLayerFind(char *path, char *name, int is_folder){
     }
 
     if (is_folder){
-        if (mkdir(name, 0755) && !opendir(name)){
-            errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", name);
+        size_t size_fill_path = strlen(path) + strlen(name) + 2;
+        char fullpath[size_fill_path];
+        if (snprintf(fullpath, size_fill_path, "%s%s", path, name) < 0)
+            return EXIT_FAILURE;
+
+        if (mkdir(fullpath, 0755) && !opendir(fullpath)){
+            errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s (Check the rights or try to rerun)", fullpath);
         }
+        printf("Jarvis created : %s\n", fullpath);
         return EXIT_SUCCESS;
     }
 
