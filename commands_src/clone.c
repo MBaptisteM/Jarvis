@@ -1,4 +1,4 @@
-#include "info_file.h"
+#include "../lib/info_file.h"
 #include "clone.h"
 
 
@@ -24,9 +24,16 @@ int main(int argc, char* argv[]){
     }
 
 
-    char* relative_path = GetRelavitvePath(argv[1]);
-    printf("%s\n", relative_path);
+    size_t size_relative_path;
+    char** relative_path = GetRelavitvePath(argv[1], &size_relative_path);
+    for (size_t i = 0; i < size_relative_path; i++){
+        printf("%s/", relative_path[i]);
+        free(relative_path[i]);
+    }
+    printf("\n");
+
     free(relative_path);
+    //free(size_relative_path);
 
     char* main_folder_path = GetOrCreateMainFolderPath();
     if (main_folder_path == NULL)
@@ -69,20 +76,33 @@ int IsEpitaRepo(char* repo_name){
 
 
 // Extract the relative path of that repo
-// Example : S1/B1/P1-GaulishVillage-i3-shell-git (for now : S1/B1/)
-char* GetRelavitvePath(char* repo_name){
-    char* relative_path = malloc(SIZE_OF_STRING);
+// Example : { S1, B1, P1-GaulishVillage-i3-shell-git } (for now : { S1, B1 })
+char** GetRelavitvePath(char *repo_name, size_t *size){
+    char** relative_path = malloc(SIZE_OF_STRING);
+    (*size) = 0;
 
     int k = 0;
     
     while (repo_name[k] < '0' ||  repo_name[k] > '9')
         k++;
 
-    snprintf(relative_path, SIZE_OF_STRING, 
+    /*snprintf(relative_path, SIZE_OF_STRING, 
             "%s%d/%s%d/", SEMESTER, (repo_name[k] - '0') * 2, 
+            BIMESTER, (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0'));*/
+        
+    (*size)++;
+    relative_path[0] = malloc(SIZE_OF_STRING);
+    snprintf(relative_path[0], SIZE_OF_STRING, "%s%d", 
+            SEMESTER, (repo_name[k] - '0') * 2);
+
+    (*size)++;
+    relative_path[1] = malloc(SIZE_OF_STRING);
+    snprintf(relative_path[1], SIZE_OF_STRING, "%s%d", 
             BIMESTER, (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0'));
+    
     k += 3;
 
+    (void)size;
     return relative_path;
 }
 
@@ -124,4 +144,49 @@ char* GetOrCreateMainFolderPath(){
     }
 
     return main_folder_path;
+}
+
+
+// Find a file or find or create a folder -> 0 if found / 1 if not found
+int OneLayerFind(char *path, char *name, int is_folder){
+    
+    // Open the current directory
+    DIR *dir;
+    struct dirent *file;
+    struct stat info;
+
+    dir = opendir(path);
+
+    if (dir == NULL)
+        return EXIT_FAILURE;
+
+    // Iterate throw all files and check if they are what we are looking for
+    while ((file = readdir(dir)) != NULL) {
+        if (stat(file->d_name, &info) == 0) {
+            if (S_ISDIR(info.st_mode) && is_folder) {
+                // Folder case
+                if (strcmp(name, file->d_name)){
+                    closedir(dir);
+                    return EXIT_SUCCESS;
+                }
+            }
+            else if (!is_folder){
+                // Not a folder case
+                if (strcmp(name, file->d_name)){
+                    closedir(dir);
+                    return EXIT_SUCCESS;
+                }
+            }
+        }
+    }
+
+    if (is_folder){
+        if (mkdir(name, 0755) && !opendir(name)){
+            errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", name);
+        }
+        return EXIT_SUCCESS;
+    }
+
+    closedir(dir);
+    return EXIT_FAILURE;
 }
