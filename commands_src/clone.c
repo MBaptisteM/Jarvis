@@ -2,8 +2,7 @@
 #include "clone.h"
 
 
-// baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/
-// epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
+// baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
 
 // Créer un fichier jarvis (qui sert de repere pour connaitre la base)
 // Stocker l'avancée de chaque push des repos
@@ -54,14 +53,20 @@ int main(int argc, char* argv[]){
         main_folder_path[size_main_folder_path + j + 1] = '\0';
 
         free(relative_path[i]);
-        size_main_folder_path = size_full_path;
+        size_main_folder_path = size_full_path - 1;
         
     }
     free(relative_path);
 
-    //system("git clone %s %s", argv[1], main_folder_path);
+    size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
+    char command_clone[command_size];
+    snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
+
+    if(system(command_clone))
+        errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");
 
     free(main_folder_path);
+
 
     // git clone <rep> <path>
 
@@ -215,7 +220,7 @@ int OneLayerFindOrCreate(char *path, char *name, int is_folder){
         if (mkdir(fullpath, 0755) && !opendir(fullpath)){
             errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s (Check the rights or try to rerun)", fullpath);
         }
-        printf("Jarvis created : %s\n", fullpath);
+        //printf("Jarvis created : %s\n", fullpath);
         return EXIT_SUCCESS;
     }
 
