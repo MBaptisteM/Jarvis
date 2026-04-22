@@ -39,5 +39,6 @@ $(CMD_PATH)/%: $(CMD_SRC_PATH)/%.c $(LIB_OBJ)
 clean:
 	rm -f $(MAIN_BIN)
 	rm -f $(CMD_BINS)
+	rm $(LIB_OBJ)
 
 .PHONY: all clean
