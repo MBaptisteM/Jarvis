@@ -22,25 +22,6 @@ int main(int argc, char* argv[]){
 
         return EXIT_SUCCESS;
     }
-
-    /*
-    size_t size_relative_path;
-    char** relative_path = GetRelavitvePath(argv[1], &size_relative_path);
-    for (size_t i = 0; i < size_relative_path; i++){
-        printf("%s/", relative_path[i]);
-        free(relative_path[i]);
-    }
-    printf("\n");
-
-    free(relative_path);
-
-    char* main_folder_path = GetOrCreateMainFolderPath();
-    if (main_folder_path == NULL)
-        return EXIT_FAILURE;
-
-    printf("path main folder : %s\n", main_folder_path);
-    free(main_folder_path);
-    */
     
 
     char* main_folder_path = GetOrCreateMainFolderPath();
@@ -78,10 +59,11 @@ int main(int argc, char* argv[]){
     }
     free(relative_path);
 
+    //system("git clone %s %s", argv[1], main_folder_path);
+
     free(main_folder_path);
 
-    // strlen()
-
+    // git clone <rep> <path>
 
 
     // Chercher les dossiers dans l'arborescence
