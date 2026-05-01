@@ -17,5 +17,9 @@ int main(){
     printf("\tTool to uninstall jarvis, there is no parameter to add\n");
     printf("\tExample : jarvis uninstall\n");
 
+    printf("->epita\n");
+    printf("\tEnable/Disable epita repository treatment");
+    printf("\tExample : jarvis epita <bool>");
+
     return EXIT_SUCCESS;
 }
