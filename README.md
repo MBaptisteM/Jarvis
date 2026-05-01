@@ -4,6 +4,7 @@ This tool provides :
     - Clone assisted (manage structure, creates folders, fill .gitignore...)
     - Connect to your epita account and extract every necessary informations about TDs.
     - Create all the folders for TPs
+    - Parameters functions to help you modify the tool as you want
 .
 .
 .
