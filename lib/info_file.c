@@ -1,5 +1,6 @@
 #include "info_file.h"
 
+// REWRITE TO BECOME READINFO
 // Return the path to the main folder
 int GetAbsolutePath(char *main_folder_path){
     // vérifie l'existence du fichier -> sinon : renvoi null -> aucun chemin n'est prévu à cet effet
@@ -52,7 +53,7 @@ int CreateInfoFile(){
 }
 
 
-int SetMainFolderPath(char* main_folder_path){
+int WriteInfo(char* key, char* value){
 
     // Put main_folder_path at the begining of file
     char* info_file_full_path = GetInfoFullPath();
@@ -72,19 +73,56 @@ int SetMainFolderPath(char* main_folder_path){
     if (new_file == NULL)
         return EXIT_FAILURE;
 
+    
+    size_t len_key = strlen(key);
 
-    char buffer[512];
-    int is_first_line = 1;
+    char buffer[SIZE_OF_STRING];
+    size_t index_buffer = 0;
 
-    while (fgets(buffer, sizeof(buffer), info_file)) {
-        if (is_first_line) {
-            fprintf(new_file, "%s\n", main_folder_path);
-        } else {
-            fputs(buffer, new_file);
+    int data_modified = 0;
+
+    while ( (buffer[index_buffer++] = fgetc(info_file)) != EOF ) {
+
+
+        size_t index_key = 0;
+        while ((buffer[index_buffer++] = fgetc(info_file)) != '"');
+
+        while (index_key < len_key && (buffer[index_buffer++] = fgetc(info_file)) == key[index_key]){
+            index_key ++;
         }
+        if (index_key == len_key && (buffer[index_buffer++] = fgetc(info_file)) == '"'){
+            // We are on the line that contains the key we were looking for
+            fprintf(new_file, "\"%s\" : \"%s\",\n", key, value);
+
+            data_modified = 1;
+
+            // Pass the current line
+            while ( (buffer[index_buffer++] = fgetc(info_file)) != EOF ){
+                if (buffer[index_buffer - 1] == ',')
+                    break;
+            }
+
+            // Write all the folder
+            while ((fgets(buffer, sizeof(buffer), info_file)) != EOF)
+                fputs(buffer, new_file);
+            
+            break;
+        }
+
+        // Write the line in the new file
+        while ( (buffer[index_buffer++] = fgetc(info_file)) != EOF ){
+            if (buffer[index_buffer - 1] == ','){
+                buffer[index_buffer] = '\0';
+                fputs(buffer, new_file);
+                break;
+            }
+        }
+
+        index_buffer = 0;
     }
-    if (is_first_line)
-        fprintf(new_file, "%s\n", main_folder_path);
+
+    if (!data_modified)
+        fprintf(new_file, "\"%s\" : \"%s\",\n", key, value);
 
     fclose(info_file);
     fclose(new_file);

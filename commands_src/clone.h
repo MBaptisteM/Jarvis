@@ -10,7 +10,6 @@
 #define BIMESTER "B"
 #define MAIN_FOLDER "TPs"
 
-#define SIZE_OF_STRING 512
 
 int IsEpitaRepo(char* repo_name);
 char** GetRelavitvePath(char *repo_name, size_t *size);

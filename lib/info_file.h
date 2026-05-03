@@ -7,10 +7,15 @@
 
 #define INFORMATION_FILE_PATH "/.jarvis/"
 #define INFORMATION_FILE_NAME "info_file"
+#define NAME_PATH_INFO_FILE "main_path"
+
+#define SIZE_OF_STRING 512
+
+
 
 int GetAbsolutePath(char *main_folder_path);
 int CreateInfoFile();
-int SetMainFolderPath(char* main_folder_path);
+int WriteInfo(char* key, char* value);
 char *GetInfoFullPath();
 
 /*  Info file structure :

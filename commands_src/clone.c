@@ -3,6 +3,10 @@
 
 
 // baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
+// https://intra.forge.epita.fr/epita-prepa-computer-science/prog-101-p-00-2029/root/prog-101-p-00-2029
+
+// https://intra.forge.epita.fr/ + {epita-prepa-computer-science/prog-208-p-05-2029/} + root/ + {prog-208-p-05-2029}
+// -> connexion au site internet -> récupère subject + given files
 
 // Créer un fichier jarvis (qui sert de repere pour connaitre la base)
 // Stocker l'avancée de chaque push des repos
@@ -169,7 +173,7 @@ char* GetOrCreateMainFolderPath(){
 
         free(path);
         
-        SetMainFolderPath(final_path);
+        WriteInfo(NAME_PATH_INFO_FILE, final_path);
 
         return final_path;
     }
