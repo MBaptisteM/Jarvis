@@ -13,7 +13,7 @@
 
 
 
-int GetAbsolutePath(char *main_folder_path);
+int ReadInfo(char* key, char *value);
 int CreateInfoFile();
 int WriteInfo(char* key, char* value);
 char *GetInfoFullPath();

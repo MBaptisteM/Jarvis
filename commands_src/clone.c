@@ -64,6 +64,7 @@ int main(int argc, char* argv[]){
 
     size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
     char command_clone[command_size];
+
     snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
 
     if(system(command_clone))
@@ -144,7 +145,7 @@ char** GetRelavitvePath(char *repo_name, size_t *size){
 char* GetOrCreateMainFolderPath(){
     char* main_folder_path = malloc(SIZE_OF_STRING);
 
-    int is_main_folder_created = GetAbsolutePath(main_folder_path);
+    int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, main_folder_path);
 
     if (is_main_folder_created == EXIT_FAILURE){
         free(main_folder_path);
