@@ -66,10 +66,13 @@ int main(int argc, char* argv[]){
     char command_clone[command_size];
 
     snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
-
+/*
     if(system(command_clone))
-        errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");
+        errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");*/
 
+
+    if (GetSubject(argv[1]))
+        errx(EXIT_FAILURE, "ERROR Impossible to get the subject.");
     free(main_folder_path);
 
 

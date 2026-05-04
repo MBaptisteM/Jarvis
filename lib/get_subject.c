@@ -100,7 +100,7 @@ const char* GetLocalUrlRepo(char* repo_name){
 
 
     static char local_url_repo[1024];
-    snprintf(local_url_repo, 1024, "%s/%s/root/%s", type_course, tp_id, tp_id);
+    snprintf(local_url_repo, 1024, "%s/%s/root/%s/EMBEDDED_subject.html", type_course, tp_id, tp_id);
 
     return local_url_repo;
 }
