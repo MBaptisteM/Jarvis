@@ -32,16 +32,18 @@ else
     SUDO=""
 fi
 
-
 $SUDO mkdir -p "$BIN_PATH"
-$SUDO mkdir -p "$LIB_PATH"
+$SUDO mkdir -p "$LIB_PATH/cmd"
 $SUDO mkdir -p "$COMP_PATH"
 
 $SUDO mkdir -p "$HOME/.jarvis"
+$SUDO mkdir -p "$HOME/.jarvis/subject"
 $SUDO chown -R "$USER:$USER" "$HOME/.jarvis"
 
+
 $SUDO cp bin/jarvis "$BIN_PATH/"
-$SUDO cp -r commands/* "$LIB_PATH/"
+$SUDO cp -r commands/* "$LIB_PATH/cmd/"
+$SUDO cp -r subject/* "$HOME/.jarvis/subject"
 $SUDO cp completion/jarvis.bash "$COMP_PATH/jarvis"
 
 
