@@ -3,10 +3,10 @@ _jarvis_completions() {
 
     cur="${COMP_WORDS[COMP_CWORD]}"
 
-    if [ -d "$HOME/.local/lib/jarvis" ]; then
-        cmd_dir="$HOME/.local/lib/jarvis"
+    if [ -d "$HOME/.local/lib/jarvis/cmd" ]; then
+        cmd_dir="$HOME/.local/lib/jarvis/cmd"
     else
-        cmd_dir="/usr/local/lib/jarvis"
+        cmd_dir="/usr/local/lib/jarvis/cmd"
     fi
 
     if [ -d "$cmd_dir" ]; then
