@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <get_subject.h>
 
 #define SEMESTER "S"
 #define BIMESTER "B"
