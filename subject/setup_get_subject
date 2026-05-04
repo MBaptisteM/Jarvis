@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -e
+
+MODE=$1
+URL=$2
+SUBJECT_PATH=$3
+
+if [ -z "$URL" ] || [ -z "$MODE" ] || [ -z "$SUBJECT_PATH" ]; then
+  echo "Usage: ./get_subject <login|run> <url> <subject_path>"
+  exit 1
+fi
+
+if [ ! -f package.json ]; then
+  echo "Downloading npm..."
+  npm init -y --prefix "$SUBJECT_PATH/"
+fi
+
+if [ ! -d node_modules/playwright ]; then
+  echo "Downloading Playwright..."
+  npm install playwright --prefix "$SUBJECT_PATH/"
+fi
+
+echo "Downloading browser..."
+npx --prefix "$SUBJECT_PATH/" playwright install
+
+node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH"
