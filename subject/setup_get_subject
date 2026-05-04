@@ -11,17 +11,19 @@ if [ -z "$URL" ] || [ -z "$MODE" ] || [ -z "$SUBJECT_PATH" ]; then
   exit 1
 fi
 
-if [ ! -f package.json ]; then
+if [ ! -f "$SUBJECT_PATH/package.json" ]; then
   echo "Downloading npm..."
   npm init -y --prefix "$SUBJECT_PATH/"
 fi
 
-if [ ! -d node_modules/playwright ]; then
+if [ ! -d "$SUBJECT_PATH/node_modules/playwright" ]; then
   echo "Downloading Playwright..."
   npm install playwright --prefix "$SUBJECT_PATH/"
 fi
 
-echo "Downloading browser..."
-npx --prefix "$SUBJECT_PATH/" playwright install
+if [ ! -d "$HOME/.cache/ms-playwright" ]; then
+  echo "Downloading browser..."
+  npx --prefix "$SUBJECT_PATH/" playwright install
+fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH"

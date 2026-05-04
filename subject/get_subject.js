@@ -12,6 +12,7 @@ const fs = require('fs');
   }
 
   const auth_path = subject_path + '/auth.json';
+  const subject_html_path = subject_path + '/subject.html';
 
   // Start the Auth window
   if (mode === "login") {
@@ -36,7 +37,7 @@ const fs = require('fs');
   // Run and load the subject
   else if (mode === "run") {
     if (!fs.existsSync(auth_path)) {
-      console.error("ERROR : Impossible to find auth.json, please auth before");
+      console.error("ERROR Impossible to find auth.json, please auth before");
       process.exit(1);
     }
 
@@ -51,14 +52,13 @@ const fs = require('fs');
     const content = await page.content();
 
     // Write the content in subject.html
-    fs.writeFileSync('subject.html', content, 'utf-8');
-    console.log("Content saved in subject.html");
+    fs.writeFileSync(subject_html_path, content, 'utf-8');
 
     await browser.close();
   }
 
   else {
-    console.error("ERROR : Unknown mode :", mode);
+    console.error("ERROR Unknown mode :", mode);
     process.exit(1);
   }
 
