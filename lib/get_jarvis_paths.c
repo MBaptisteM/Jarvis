@@ -8,7 +8,7 @@ const char *GetCommandPath(){
         if (access("./commands", F_OK) == 0)
             return "./commands";
         else
-            errx(EXIT_FAILURE, "ERROR : Impossible to find the path to jarvis commands, try to install again.");
+            errx(EXIT_FAILURE, "ERROR Impossible to find the path to jarvis commands, try to install again.");
     }  
 
     static char commands_path[512];
@@ -27,7 +27,7 @@ const char *GetSubjectPath(){
         if (access("./subject", F_OK) == 0) 
             return "./subject";
         else
-            errx(EXIT_FAILURE, "ERROR : Impossible to find the path to jarvis commands, try to install again.");
+            errx(EXIT_FAILURE, "ERROR Impossible to find the path to jarvis commands, try to install again.");
     }
 
     static char subject_path[512];
@@ -43,7 +43,7 @@ char *GetInfoPath(){
 
     char *home_path;
     if (GetDotJarvisPath(&home_path))
-        errx(EXIT_FAILURE, "ERROR : Impoossible to find home path.");
+        errx(EXIT_FAILURE, "ERROR Impoossible to find home path.");
 
     char* info_file_full_path = malloc(512);
     snprintf(info_file_full_path, 512, 

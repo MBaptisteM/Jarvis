@@ -1,7 +1,10 @@
 #include <get_subject.h>
 
-// login and save the subject
-int GetSubject(char* local_url_repo){
+// log and save the subject
+int GetSubject(char* repo_name){
+
+    const char* local_url_repo = GetLocalUrlRepo(repo_name);
+
     char cmd[1024];
 
     const char* subject_path = GetSubjectPath();
@@ -20,7 +23,7 @@ int GetSubject(char* local_url_repo){
 
     FILE *fp = popen(cmd, "r");
     if (!fp) {
-        errx(EXIT_FAILURE, "ERROR : Impossible to load the subject.");
+        errx(EXIT_FAILURE, "ERROR Impossible to load the subject.");
     }
 
     char buffer[4096];
@@ -45,8 +48,59 @@ int Auth(){
         "%s/./setup_get_subject login %s %s", subject_path, URL, subject_path);
 
     if (system(cmd) == -1)
-        errx(EXIT_FAILURE, "ERROR : impossible to auth.");
+        errx(EXIT_FAILURE, "ERROR impossible to auth.");
 
-    printf("Auth completed, you can now use Jarvis!\n");
     return EXIT_SUCCESS;
+}
+
+#define a 1000
+
+// Get the forge local url from a repo name
+const char* GetLocalUrlRepo(char* repo_name){
+    char* actual_character = repo_name;
+    size_t index = 0;
+    size_t size_beginin_repo_path = strlen(BEGINING_REPO_LOCAL_PATH);
+
+    char type_course[256];
+    char tp_id[256];
+
+
+    while (*actual_character != 0){
+        while (index < size_beginin_repo_path && *actual_character == BEGINING_REPO_LOCAL_PATH[index]){
+            index++;
+            actual_character++;
+        }
+
+        if (index == size_beginin_repo_path){
+            size_t i = 0;
+            while (*actual_character != 0 && *actual_character != '/'){
+                type_course[i] = *actual_character;
+                actual_character++;
+                i++;
+            }
+
+            i = 0;
+            actual_character++;
+
+            while (*actual_character != 0 && *actual_character != '/'){
+                tp_id[i] = *actual_character;
+                actual_character++;
+                i++;
+            }
+
+            break;
+        }
+
+        if (*actual_character != BEGINING_REPO_LOCAL_PATH[0])
+            actual_character++;
+    }
+
+    if (*actual_character == 0)
+        errx(EXIT_FAILURE, "ERROR %s is not an EPITA repo.", repo_name);
+
+
+    static char local_url_repo[1024];
+    snprintf(local_url_repo, 1024, "%s/%s/root/%s", type_course, tp_id, tp_id);
+
+    return local_url_repo;
 }
