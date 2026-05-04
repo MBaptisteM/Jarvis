@@ -3,10 +3,10 @@
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <get_jarvis_paths.h>
 
 #define COMMAND_HELP "help"
 
 
 int main(int argc, char* argv[]);
-const char *get_commands_path();
+const char *GetCommandPath();
