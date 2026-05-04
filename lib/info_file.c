@@ -1,4 +1,5 @@
 #include "info_file.h"
+#include <get_jarvis_paths.h>
 
 // REWRITE TO BECOME READINFO
 
@@ -7,7 +8,7 @@ int ReadInfo(char* key, char *value){
     // vérifie l'existence du fichier -> sinon : renvoi null -> aucun chemin n'est prévu à cet effet
     // si existe check existence du dossier inscrit dans le fichier -> sinon chercher le nouveau path -> error
 
-    char* info_file_full_path = GetInfoFullPath();
+    char* info_file_full_path = GetInfoPath();
     FILE *info_file = fopen(info_file_full_path, "r");
     free(info_file_full_path);
 
@@ -69,7 +70,7 @@ int ReadInfo(char* key, char *value){
 }
 
 int CreateInfoFile(){
-    char *info_file_full_path = GetInfoFullPath();
+    char *info_file_full_path = GetInfoPath();
     printf("create : %s\n", info_file_full_path);
     FILE *info_file = fopen(info_file_full_path, "w");
     free(info_file_full_path);
@@ -86,7 +87,7 @@ int CreateInfoFile(){
 int WriteInfo(char* key, char* value){
 
     // Put main_folder_path at the begining of file
-    char* info_file_full_path = GetInfoFullPath();
+    char* info_file_full_path = GetInfoPath();
     FILE *info_file = fopen(info_file_full_path, "r");
     
 
@@ -97,7 +98,7 @@ int WriteInfo(char* key, char* value){
     char new_file_full_path[512];
     char *home = getenv("HOME");
     snprintf(new_file_full_path, sizeof(new_file_full_path), 
-            "%s%s%s", home, INFORMATION_FILE_PATH, "temp");
+            "%s%s/%s", home, NAME_JARVIS_FOLDER, "temp");
     FILE *new_file = fopen(new_file_full_path, "w");
 
     if (new_file == NULL)
@@ -137,7 +138,7 @@ int WriteInfo(char* key, char* value){
             }
 
             // Write all the folder
-            while ((fgets(buffer, sizeof(buffer), info_file)) != EOF)
+            while ((fgets(buffer, sizeof(buffer), info_file)) != NULL)
                 fputs(buffer, new_file);
             
             break;
@@ -167,14 +168,4 @@ int WriteInfo(char* key, char* value){
     free(info_file_full_path);
     
     return EXIT_SUCCESS;
-}
-
-char *GetInfoFullPath(){
-    char *home = getenv("HOME");
-    size_t size = strlen(home) + strlen(INFORMATION_FILE_PATH) + strlen(INFORMATION_FILE_NAME) + 1;
-    char* info_file_full_path = malloc(size);
-    snprintf(info_file_full_path, size, 
-            "%s%s%s", home, INFORMATION_FILE_PATH, INFORMATION_FILE_NAME);
-    
-    return info_file_full_path;
 }

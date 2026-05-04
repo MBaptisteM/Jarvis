@@ -5,8 +5,7 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#define INFORMATION_FILE_PATH "/.jarvis/"
-#define INFORMATION_FILE_NAME "info_file"
+
 #define NAME_PATH_INFO_FILE "main_path"
 
 #define SIZE_OF_STRING 512
