@@ -15,5 +15,5 @@
 
 int GetSubject(char* repo_name);
 int GetGivenFiles(char* repo_name);
-int Auth();
+int Login();
 const char* GetLocalUrlRepo(char* repo_name);

@@ -14,7 +14,7 @@ const fs = require('fs');
   const auth_path = subject_path + '/auth.json';
   const subject_html_path = subject_path + '/subject.html';
 
-  // Start the Auth window
+  // Start the Login window
   if (mode === "login") {
     console.log("\n➡️ \x1b[1mPlease \x1b[32mconnect to your forge account.\x1b[0m");
     console.log("➡️ \x1b[1mThen close the window.\x1b[0m");
@@ -27,7 +27,7 @@ const fs = require('fs');
 
     page.on('close', async () => {
       await context.storageState({ path: auth_path });
-      console.log("Auth saved !");
+      console.log("Login saved !");
 
       await browser.close();
       process.exit(0);

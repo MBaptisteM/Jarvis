@@ -12,7 +12,7 @@ int GetSubject(char* repo_name){
 
     // If not already login
     if (access(auth_path, F_OK) != 0) {
-        Auth();
+        Login();
     }
 
     // Get subject
@@ -41,7 +41,7 @@ int GetGivenFiles(char* repo_name){
 
     // If not already login
     if (access(auth_path, F_OK) != 0) {
-        Auth();
+        Login();
     }
     
     // Get given files
@@ -59,8 +59,8 @@ int GetGivenFiles(char* repo_name){
     return exit_code; // 0 : success | 1 : failure
 }
 
-// Authentification to forge
-int Auth(){
+// Login to forge
+int Login(){
     char cmd[1024];
 
     const char* subject_path = GetSubjectPath();
