@@ -70,9 +70,25 @@ int main(int argc, char* argv[]){
     if(system(command_clone))
         errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");*/
 
+    // Check if the repo is empty
+        // yes -> download and unzip
+        // no -> ask if he wants to complete what is already created
+
+    int given_files = GetGivenFiles(argv[1]);
+    if (given_files == -1)
+        errx(EXIT_FAILURE, "ERROR Impossible to get the given files.");
+    else if (given_files == 0){
+        // There is a given file
+        printf("file downloaded\n");
+    }
+    else if (given_files == 1){
+        // There is no given file
+        printf("there is not file to download\n");
+    }
 
     if (GetSubject(argv[1]))
         errx(EXIT_FAILURE, "ERROR Impossible to get the subject.");
+
     free(main_folder_path);
 
 
