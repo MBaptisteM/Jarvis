@@ -5,8 +5,6 @@ int GetSubject(char* repo_name){
 
     const char* local_url_repo = GetLocalUrlRepo(repo_name);
 
-    char cmd[1024];
-
     const char* subject_path = GetSubjectPath();
 
     char auth_path[512];
@@ -17,22 +15,48 @@ int GetSubject(char* repo_name){
         Auth();
     }
 
-    // Session connected, load the subject
-    snprintf(cmd, sizeof(cmd),
-        "%s/./setup_get_subject run \"%s%s\" %s", subject_path, URL, local_url_repo, subject_path);
+    // Get subject
+    char cmd_subject[1024];
+    snprintf(cmd_subject, sizeof(cmd_subject),
+        "%s/./setup_get_subject run \"%s%s%s\" %s", subject_path, URL, local_url_repo, SUBJECT, subject_path);
 
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
+    FILE *fp_subject = popen(cmd_subject, "r");
+    if (!fp_subject) {
         errx(EXIT_FAILURE, "ERROR Impossible to load the subject.");
     }
+    pclose(fp_subject);
 
-    char buffer[4096];
-    while (fgets(buffer, sizeof(buffer), fp)) {
-        printf("%s", buffer);
-    }
-
-    pclose(fp);
     return EXIT_SUCCESS;
+}
+
+// log and download the given files -> EXIT_FAILURE if no given file
+int GetGivenFiles(char* repo_name){
+
+    const char* local_url_repo = GetLocalUrlRepo(repo_name);
+
+    const char* subject_path = GetSubjectPath();
+
+    char auth_path[512];
+    snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
+
+    // If not already login
+    if (access(auth_path, F_OK) != 0) {
+        Auth();
+    }
+    
+    // Get given files
+    char cmd_given_files[1024];
+    snprintf(cmd_given_files, sizeof(cmd_given_files),
+        "%s/./setup_get_subject download \"%s%s%s\" %s", subject_path, URL, local_url_repo, GIVEN_FILES, subject_path);
+
+
+    int status = system(cmd_given_files);
+    if (status == -1) 
+        errx(-1, "ERROR Impossible to look for the given files");
+
+    int exit_code = WEXITSTATUS(status);
+        
+    return exit_code; // 0 : success | 1 : failure
 }
 
 // Authentification to forge
@@ -100,7 +124,8 @@ const char* GetLocalUrlRepo(char* repo_name){
 
 
     static char local_url_repo[1024];
-    snprintf(local_url_repo, 1024, "%s/%s/root/%s/EMBEDDED_subject.html", type_course, tp_id, tp_id);
+
+    snprintf(local_url_repo, 1024, "%s/%s/root/%s/", type_course, tp_id, tp_id);
 
     return local_url_repo;
 }

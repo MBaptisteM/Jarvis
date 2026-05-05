@@ -10,6 +10,10 @@
 #define URL "https://intra.forge.epita.fr/"
 #define BEGINING_REPO_LOCAL_PATH "forge.epita.fr:p/"
 
-int GetSubject(char* local_url_repo);
+#define SUBJECT "EMBEDDED_subject.html"
+#define GIVEN_FILES "assets.tar.gz"
+
+int GetSubject(char* repo_name);
+int GetGivenFiles(char* repo_name);
 int Auth();
 const char* GetLocalUrlRepo(char* repo_name);
