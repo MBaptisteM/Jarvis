@@ -83,7 +83,7 @@ int main(int argc, char* argv[]){
     }
     else if (given_files == 1){
         // There is no given file
-        printf("there is not file to download\n");
+        printf("there is no file to download\n");
     }
 
     if (GetSubject(argv[1]))

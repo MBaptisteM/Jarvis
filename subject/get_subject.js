@@ -86,7 +86,7 @@ const fs = require('fs');
       if (!response.ok()) {
         console.error(`HTTP ERROR : ${response.status()}`);
         await browser.close();
-        process.exit(1);
+        process.exit(-1);
       }
 
       // Get the content
