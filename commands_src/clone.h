@@ -15,7 +15,7 @@
 #define MAIN_FOLDER "TPs"
 
 
-int IsEpitaRepo(char* repo_name);
-char** GetRelavitvePath(char *repo_name, size_t *size);
-char* GetOrCreateMainFolderPath();
-int OneLayerFindOrCreate(char *path, char *name, int is_folder);
+int __IsEpitaRepo(char* repo_name);
+char** __GetRelavitvePath(char *repo_name, size_t *size);
+char* __GetOrCreateMainFolderPath();
+int __OneLayerFindOrCreate(char *path, char *name, int is_folder);

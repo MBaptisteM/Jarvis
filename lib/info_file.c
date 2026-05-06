@@ -14,7 +14,7 @@ int ReadInfo(char* key, char *value){
 
 
     if (info_file == NULL){
-        CreateInfoFile();
+        __CreateInfoFile();
         return EXIT_FAILURE;
     }
 
@@ -69,7 +69,7 @@ int ReadInfo(char* key, char *value){
     return EXIT_FAILURE;
 }
 
-int CreateInfoFile(){
+int __CreateInfoFile(){
     char *info_file_full_path = GetInfoPath();
     printf("create : %s\n", info_file_full_path);
     FILE *info_file = fopen(info_file_full_path, "w");

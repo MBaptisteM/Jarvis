@@ -13,10 +13,5 @@
 
 
 int ReadInfo(char* key, char *value);
-int CreateInfoFile();
+int __CreateInfoFile();
 int WriteInfo(char* key, char* value);
-char *GetInfoFullPath();
-
-/*  Info file structure :
-<Path of the main folder>
-*/

@@ -17,7 +17,7 @@ int main(int argc, char* argv[]){
         errx(EXIT_FAILURE, "ERROR you must enter the git remote to clone your repository");
 
 
-    if (!IsEpitaRepo(argv[1])){
+    if (!__IsEpitaRepo(argv[1])){
         printf("this string is not an epita repo\n");
 
         // Clone le repo
@@ -26,18 +26,18 @@ int main(int argc, char* argv[]){
     }
     
 
-    char* main_folder_path = GetOrCreateMainFolderPath();
+    char* main_folder_path = __GetOrCreateMainFolderPath();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
 
     size_t size_relative_path;
-    char** relative_path = GetRelavitvePath(argv[1], &size_relative_path);
+    char** relative_path = __GetRelavitvePath(argv[1], &size_relative_path);
 
 
     size_t size_main_folder_path = strlen(main_folder_path);
 
     for (size_t i = 0; i < size_relative_path; i++){
-        if (OneLayerFindOrCreate(main_folder_path, relative_path[i], 1)){
+        if (__OneLayerFindOrCreate(main_folder_path, relative_path[i], 1)){
             errx( EXIT_FAILURE, "ERROR Impossible to find or create te folder : %s%s", 
                                 main_folder_path, relative_path[i]);
         }
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
 }
 
 // Check if it is an epita repo
-int IsEpitaRepo(char* repo_name){
+int __IsEpitaRepo(char* repo_name){
     int i = 0;
     while (repo_name[i] != '\0' && repo_name[i] != '@')
         i++;
@@ -129,7 +129,7 @@ int IsEpitaRepo(char* repo_name){
 
 // Extract the relative path of that repo
 // Example : { S1, B1, P1-GaulishVillage-i3-shell-git } (for now : { S1, B1 })
-char** GetRelavitvePath(char *repo_name, size_t *size){
+char** __GetRelavitvePath(char *repo_name, size_t *size){
     char** relative_path = malloc(SIZE_OF_STRING);
     (*size) = 0;
 
@@ -160,7 +160,7 @@ char** GetRelavitvePath(char *repo_name, size_t *size){
 
 // Get the path to the main folder or create it
 // Example : ~/Jarvis/TPs/
-char* GetOrCreateMainFolderPath(){
+char* __GetOrCreateMainFolderPath(){
     char* main_folder_path = malloc(SIZE_OF_STRING);
 
     int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, main_folder_path);
@@ -202,7 +202,7 @@ char* GetOrCreateMainFolderPath(){
 
 
 // Find a file or find or create a folder -> 0 if found / 1 if not found
-int OneLayerFindOrCreate(char *path, char *name, int is_folder){
+int __OneLayerFindOrCreate(char *path, char *name, int is_folder){
     
     // Open the current directory
     DIR *dir;

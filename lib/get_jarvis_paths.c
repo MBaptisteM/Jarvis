@@ -4,7 +4,7 @@
 const char *GetCommandPath(){
 
     char *home_path;
-    if (GetRootPath(&home_path) && GetLocalPath(&home_path)){
+    if (__GetRootPath(&home_path) && __GetLocalPath(&home_path)){
         if (access("./commands", F_OK) == 0)
             return "./commands";
         else
@@ -23,7 +23,7 @@ const char *GetCommandPath(){
 const char *GetSubjectPath(){
 
     char *home_path;
-    if (GetDotJarvisPath(&home_path)){
+    if (__GetDotJarvisPath(&home_path)){
         if (access("./subject", F_OK) == 0) 
             return "./subject";
         else
@@ -42,7 +42,7 @@ const char *GetSubjectPath(){
 char *GetInfoPath(){
 
     char *home_path;
-    if (GetDotJarvisPath(&home_path))
+    if (__GetDotJarvisPath(&home_path))
         errx(EXIT_FAILURE, "ERROR Impoossible to find home path.");
 
     char* info_file_full_path = malloc(512);
@@ -55,7 +55,7 @@ char *GetInfoPath(){
 
 
 // Get the path to /usr/local/lib/jarvis
-int GetRootPath(char** path){
+int __GetRootPath(char** path){
     if (access("/usr/local/lib/jarvis", F_OK) == 0) {
         *path = malloc(512);
         if (!*path) 
@@ -69,7 +69,7 @@ int GetRootPath(char** path){
 }
 
 // Get the path to ~/.local/lib/jarvis
-int GetLocalPath(char** path){
+int __GetLocalPath(char** path){
     char *home = getenv("HOME");
     if (home) {
         *path = malloc(512);
@@ -87,7 +87,7 @@ int GetLocalPath(char** path){
 }
 
 // Get the path to ~/.jarvis
-int GetDotJarvisPath(char** path){
+int __GetDotJarvisPath(char** path){
     char *home = getenv("HOME");
     if (home) {
         *path = malloc(512);

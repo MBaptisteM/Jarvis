@@ -4,7 +4,7 @@
 // Let the user choose and option and return the index of the option
 int ChoiceMCQ(const char *options[], int num_choices){
     struct termios orig;
-    EnableRawMode(&orig);
+    __EnableRawMode(&orig);
 
 
     int choice = 0;
@@ -41,12 +41,12 @@ int ChoiceMCQ(const char *options[], int num_choices){
         }
     }
 
-    DisableRawMode(&orig);
+    __DisableRawMode(&orig);
     return choice;
 }
 
 
-void EnableRawMode(struct termios *orig){
+void __EnableRawMode(struct termios *orig){
     struct termios raw;
     tcgetattr(STDIN_FILENO, orig);
     raw = *orig;
@@ -55,6 +55,6 @@ void EnableRawMode(struct termios *orig){
 }
 
 
-void DisableRawMode(struct termios *orig){
+void __DisableRawMode(struct termios *orig){
     tcsetattr(STDIN_FILENO, TCSAFLUSH, orig);
 }
