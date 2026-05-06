@@ -1,4 +1,3 @@
-#include "../lib/info_file.h"
 #include "clone.h"
 
 

@@ -7,6 +7,9 @@
 #include <dirent.h>
 #include <get_subject.h>
 
+#include "info_file.h"
+#include "choice.h"
+
 #define SEMESTER "S"
 #define BIMESTER "B"
 #define MAIN_FOLDER "TPs"

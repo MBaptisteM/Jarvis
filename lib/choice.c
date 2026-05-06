@@ -2,7 +2,7 @@
 
 
 // Let the user choose and option and return the index of the option
-int ChoiceMCQ(const char *options[], size_t num_choices){
+int ChoiceMCQ(const char *options[], int num_choices){
     struct termios orig;
     EnableRawMode(&orig);
 
@@ -13,7 +13,7 @@ int ChoiceMCQ(const char *options[], size_t num_choices){
 
     while (1) {
         // Moove the cursor
-        printf("\033[%zuA", num_choices);
+        printf("\033[%uA", num_choices);
 
         for (int i = 0; i < num_choices; i++) {
             // Erase the line

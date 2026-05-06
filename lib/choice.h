@@ -6,4 +6,4 @@
 
 void EnableRawMode(struct termios *orig);
 void DisableRawMode(struct termios *orig);
-int ChoiceMCQ(const char *options[], size_t num_choices);
+int ChoiceMCQ(const char *options[], int num_choices);
