@@ -101,7 +101,7 @@ const fs = require('fs');
 
     } catch (err) {
       console.error("ERROR Impossible to get the given files :", err.message);
-      process.exit(1);
+      process.exit(-1);
     }
 
     await browser.close();

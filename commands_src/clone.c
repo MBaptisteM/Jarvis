@@ -18,13 +18,21 @@ int main(int argc, char* argv[]){
 
 
     if (!__IsEpitaRepo(argv[1])){
-        printf("this string is not an epita repo\n");
+        printf("WARNING This string is not an epita repo\n");
+        printf("-> Classic clone\n");
 
-        // Clone le repo
+        size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
+        char command_clone[command_size];
+        snprintf(command_clone, command_size, "git clone %s", argv[1]);
+
+        if(system(command_clone))
+            errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");
 
         return EXIT_SUCCESS;
     }
     
+
+    // CREATE PATH
 
     char* main_folder_path = __GetOrCreateMainFolderPath();
     if (main_folder_path == NULL)
@@ -61,35 +69,116 @@ int main(int argc, char* argv[]){
     }
     free(relative_path);
 
-    size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
-    char command_clone[command_size];
 
-    snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
-/*
-    if(system(command_clone))
-        errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");*/
+    // Bool to know if the repo is new or empty
+    int repo_exists_or_filled = 0;
 
-    // Check if the repo is empty
-        // yes -> download and unzip
-        // no -> ask if he wants to complete what is already created
 
-    int given_files = GetGivenFiles(argv[1]);
-    if (given_files == -1)
-        errx(EXIT_FAILURE, "ERROR Impossible to get the given files.");
-    else if (given_files == 0){
-        // There is a given file
-        printf("file downloaded\n");
+
+    char *read_data;
+    int already_cloned = ReadInfo(argv[1], &read_data) == 0;
+
+    
+
+    if (already_cloned){
+        size_t size_old_repo_path = size_main_folder_path + strlen(read_data) + 2;
+        char old_repo_path[size_old_repo_path];
+        snprintf(old_repo_path, size_old_repo_path, "%s%s", main_folder_path, read_data);
+
+        if (access(old_repo_path, F_OK) == 0){
+            repo_exists_or_filled = 1;
+            printf("\n\033[1;31mWARNING This repository already exists.\033[0m\n");
+        }
+        free(read_data);
     }
-    else if (given_files == 1){
-        // There is no given file
-        printf("there is no file to download\n");
+
+    if (!repo_exists_or_filled){
+        // CLONE
+        /*
+        size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
+        char command_clone[command_size];
+        snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
+
+        if(system(command_clone))
+            errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");*/
+
+
+        // Get and save the name of the repo
+
+        //format : type/id/root... | goal format : type-id-name
+        const char *local_url_repo = GetLocalUrlRepo(argv[1]);
+
+        char repo_name[SIZE_OF_STRING];
+        size_t i = 0;
+
+        // extract type
+        while (*local_url_repo != '/')
+            repo_name[i++] = *(local_url_repo++);
+        
+        local_url_repo++;
+        repo_name[i++] = '-';
+        
+        // extract id
+        while (*local_url_repo != '/')
+            repo_name[i++] = *(local_url_repo++);
+            
+
+        repo_name[i++] = '-';
+        size_t j = 0;
+
+        //extract name from name@git...
+        while (argv[1][j] != '@')
+            repo_name[i++] = argv[1][j++];
+            
+        
+        repo_name[i] = 0;
+
+        WriteInfo(argv[1], repo_name);
+
+        // PAS argv[1] mais nom apres rename
+        // Check if the clone is empty
+        size_t size_repo_path = size_main_folder_path + strlen(repo_name) + 2;
+        char repo_path[size_repo_path];
+        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
+
+        repo_exists_or_filled = repo_exists_or_filled || !IsEmpty(repo_path);
+
+        if (repo_exists_or_filled){
+            printf("\n\033[1;31mWARNING This repository is not empty.\033[0m\n");
+        }
+            
     }
 
-    if (GetSubject(argv[1]))
-        errx(EXIT_FAILURE, "ERROR Impossible to get the subject.");
+    if (repo_exists_or_filled){
+        printf("\033[1mWhat should be done ?\033[0m\n\n");
+
+        const char* choices[] = {
+            "Add the tree structure missing files/folders.",
+            "Do not change the content of the repo.",
+            "Erase the repo content and create the expected tree structure."
+        };
+        switch(ChoiceMCQ(choices, 3)){
+            case 0:
+                __GivenFilesHandling(argv[1]);
+                __SubjectHandling(argv[1]);
+                break;
+            case 1:
+                break;
+            case 2:
+                __GivenFilesHandling(argv[1]);
+                __SubjectHandling(argv[1]);
+                break;
+            default:
+                errx(EXIT_FAILURE, "ERROR Impossible to get the choice");
+        }
+    }
+    else{
+        __GivenFilesHandling(argv[1]);
+        __SubjectHandling(argv[1]);
+    }
 
     free(main_folder_path);
-
+    
 
     // git clone <rep> <path>
 
@@ -108,6 +197,43 @@ int main(int argc, char* argv[]){
     // Clone / Push si github activé (check si clone déjà fait)
     // Envoyer l'utilisateur dans le repo
 
+    return EXIT_SUCCESS;
+}
+
+// Get the given files
+// 0 : no given files | 1 : given files downloaded | else : error
+int __GivenFilesHandling(char* repo_name){
+    printf("Checking for given files...\n");
+    int given_files = GetGivenFiles(repo_name);
+
+    if (given_files != 0 && given_files != 1){
+        printf("Second try to check for given files...\n");
+        given_files = GetGivenFiles(repo_name);
+    }
+    
+    if (given_files == 0)
+        return 1;
+    else if (given_files == 1)
+        return 0;
+    errx(-1, "ERROR Impossible to get the given files (failed twice). [Retry or login again]");
+}
+
+
+// Get the subject
+int __SubjectHandling(char* repo_name){
+    printf("Trying to get the subject...\n");
+
+    int subject_result = GetSubject(repo_name);
+
+    if (subject_result){
+        printf("Second try to get the subject...\n");
+        subject_result = GetSubject(repo_name);
+    }
+
+    if (subject_result)
+        errx(EXIT_FAILURE, "ERROR Impossible to get the subject (failed twice). [Retry or login again]");
+
+    printf("\033[32mSubject downloaded.\033[0m\n");
     return EXIT_SUCCESS;
 }
 
@@ -134,7 +260,7 @@ char** __GetRelavitvePath(char *repo_name, size_t *size){
     (*size) = 0;
 
     int k = 0;
-    
+
     while (repo_name[k] < '0' ||  repo_name[k] > '9')
         k++;
 
@@ -142,15 +268,18 @@ char** __GetRelavitvePath(char *repo_name, size_t *size){
             "%s%d/%s%d/", SEMESTER, (repo_name[k] - '0') * 2, 
             BIMESTER, (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0'));*/
         
+    int num_bimester = (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0');
+    int num_semester = num_bimester / 2 + num_bimester % 2;
+
     (*size)++;
     relative_path[0] = malloc(SIZE_OF_STRING);
     snprintf(relative_path[0], SIZE_OF_STRING, "%s%d", 
-            SEMESTER, (repo_name[k] - '0') * 2);
+            SEMESTER, num_semester);
 
     (*size)++;
     relative_path[1] = malloc(SIZE_OF_STRING);
     snprintf(relative_path[1], SIZE_OF_STRING, "%s%d", 
-            BIMESTER, (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0'));
+            BIMESTER, num_bimester);
     
     k += 3;
 
@@ -161,12 +290,11 @@ char** __GetRelavitvePath(char *repo_name, size_t *size){
 // Get the path to the main folder or create it
 // Example : ~/Jarvis/TPs/
 char* __GetOrCreateMainFolderPath(){
-    char* main_folder_path = malloc(SIZE_OF_STRING);
+    char* main_folder_path;
 
-    int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, main_folder_path);
+    int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, &main_folder_path);
 
     if (is_main_folder_created == EXIT_FAILURE){
-        free(main_folder_path);
         if (mkdir(MAIN_FOLDER, 0755) && !opendir(MAIN_FOLDER)){
             errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", MAIN_FOLDER);
         }
