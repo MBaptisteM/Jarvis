@@ -1,4 +1,4 @@
-#include "tree_structure.h";
+#include "tree_structure.h"
 
 
 int IsEmpty(char* path){
@@ -8,7 +8,7 @@ int IsEmpty(char* path){
     dir = opendir(path);
 
     if (dir == NULL) {
-        errx(-1, "ERROR Impossible to open folder %s", path);
+        errx(-1, "ERROR Impossible to open the folder %s", path);
     }
 
     while ((entry = readdir(dir)) != NULL) {

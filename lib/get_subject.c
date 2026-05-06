@@ -3,7 +3,7 @@
 // log and save the subject
 int GetSubject(char* repo_name){
 
-    const char* local_url_repo = __GetLocalUrlRepo(repo_name);
+    const char* local_url_repo = GetLocalUrlRepo(repo_name);
 
     const char* subject_path = GetSubjectPath();
 
@@ -32,7 +32,7 @@ int GetSubject(char* repo_name){
 // log and download the given files -> EXIT_FAILURE if no given file
 int GetGivenFiles(char* repo_name){
 
-    const char* local_url_repo = __GetLocalUrlRepo(repo_name);
+    const char* local_url_repo = GetLocalUrlRepo(repo_name);
 
     const char* subject_path = GetSubjectPath();
 
@@ -80,7 +80,7 @@ int Login(){
 #define a 1000
 
 // Get the forge local url from a repo name
-const char* __GetLocalUrlRepo(char* repo_name){
+const char* GetLocalUrlRepo(char* repo_name){
     char* actual_character = repo_name;
     size_t index = 0;
     size_t size_beginin_repo_path = strlen(BEGINING_REPO_LOCAL_PATH);
@@ -102,6 +102,7 @@ const char* __GetLocalUrlRepo(char* repo_name){
                 actual_character++;
                 i++;
             }
+            type_course[i] = 0;
 
             i = 0;
             actual_character++;
@@ -111,6 +112,7 @@ const char* __GetLocalUrlRepo(char* repo_name){
                 actual_character++;
                 i++;
             }
+            tp_id[i] = 0;
 
             break;
         }

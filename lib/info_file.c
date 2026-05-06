@@ -4,7 +4,7 @@
 // REWRITE TO BECOME READINFO
 
 // Return the value associated to the key in entry
-int ReadInfo(char* key, char *value){
+int ReadInfo(char* key, char **value){
     // vérifie l'existence du fichier -> sinon : renvoi null -> aucun chemin n'est prévu à cet effet
     // si existe check existence du dossier inscrit dans le fichier -> sinon chercher le nouveau path -> error
 
@@ -45,13 +45,14 @@ int ReadInfo(char* key, char *value){
                     break;
             }
 
+            *value = malloc(SIZE_OF_STRING);
             size_t i = 0;
-            while ( (value[i++] = fgetc(info_file)) != EOF ){
-                if (value[i - 1] == '"')
+            while ( ((*value)[i++] = fgetc(info_file)) != EOF ){
+                if ((*value)[i - 1] == '"')
                     break;
             }
 
-            value[i - 1] = 0;
+            (*value)[i - 1] = 0;
 
             fclose(info_file);
 
@@ -147,7 +148,7 @@ int WriteInfo(char* key, char* value){
         // Write the line in the new file
         while ( (buffer[index_buffer++] = fgetc(info_file)) != EOF ){
             if (buffer[index_buffer - 1] == ','){
-                buffer[index_buffer] = '\0';
+                buffer[index_buffer + 1] = 0;
                 fputs(buffer, new_file);
                 break;
             }

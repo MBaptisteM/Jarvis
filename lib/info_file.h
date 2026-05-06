@@ -11,7 +11,6 @@
 #define SIZE_OF_STRING 512
 
 
-
-int ReadInfo(char* key, char *value);
+int ReadInfo(char* key, char **value);
 int __CreateInfoFile();
 int WriteInfo(char* key, char* value);

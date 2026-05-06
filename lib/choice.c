@@ -13,7 +13,7 @@ int ChoiceMCQ(const char *options[], int num_choices){
 
         for (int i = 0; i < num_choices; i++) {
             if (i == choice)
-                printf("> %s\n", options[i]);
+                printf("> \033[7m%s\033[0m\n", options[i]);
             else
                 printf("  %s\n", options[i]);
         }
