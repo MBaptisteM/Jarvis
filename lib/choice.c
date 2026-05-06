@@ -9,21 +9,15 @@ int ChoiceMCQ(const char *options[], int num_choices){
 
     int choice = 0;
 
-    printf("\n\n\n");
-
     while (1) {
-        // Moove the cursor
-        printf("\033[%uA", num_choices);
 
         for (int i = 0; i < num_choices; i++) {
-            // Erase the line
-            printf("\033[2K");
-
             if (i == choice)
                 printf("> %s\n", options[i]);
             else
                 printf("  %s\n", options[i]);
         }
+
 
         char c = getchar();
 
@@ -39,7 +33,28 @@ int ChoiceMCQ(const char *options[], int num_choices){
         } else if (c == '\n') {
             break;
         }
+
+
+        // Moove the cursor
+        printf("\033[%uA", num_choices);
+
+        for (int i = 0; i < num_choices; i++) {
+            // Erase the line
+            printf("\033[2K");
+        }
     }
+
+    // Moove the cursor
+    printf("\033[%uA", num_choices);
+
+    for (int i = 0; i < num_choices; i++) {
+        // Erase the line
+        printf("\033[2K\n");
+    }
+
+    // Moove the cursor
+    printf("\033[%uA", num_choices);
+    
 
     __DisableRawMode(&orig);
     return choice;
