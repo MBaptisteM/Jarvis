@@ -26,3 +26,4 @@ int __SubjectHandling(char* repo_name);
 int __UncompressGivenFiles(char *folder_path, char* repo_name);
 int __GivenFilesCopy(char *path_folder, char *targer_folder);
 int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name);
+int __CreateSubjectElements(char *repo_path, char *repo_name);

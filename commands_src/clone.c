@@ -110,9 +110,6 @@ int main(int argc, char* argv[]){
         char command_clone[command_size];
         snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
 
-        if(system(command_clone))
-            errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
-
 
         // Get and save the name of the repo
 
@@ -143,8 +140,6 @@ int main(int argc, char* argv[]){
         
         repo_name[i] = 0;
 
-        WriteInfo(argv[1], repo_name);
-
         snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
 
         // PAS argv[1] mais nom apres rename
@@ -153,11 +148,28 @@ int main(int argc, char* argv[]){
         char repo_path[size_repo_path];
         snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
 
-        repo_exists_or_filled = repo_exists_or_filled || !IsEmpty(repo_path);
 
-        if (repo_exists_or_filled){
-            printf("\n\033[1;31mWARNING This repository is not empty.\033[0m\n");
-        }   
+        if(system(command_clone)){
+            // Handle error in previous execution
+            if (access(repo_path, F_OK) == 0){
+                WriteInfo(argv[1], repo_name);
+
+                repo_exists_or_filled = 1;
+                printf("\n\033[1;31mWARNING This repository already exists.\033[0m\n");
+            }
+            else
+                errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
+        }
+        else{
+            repo_exists_or_filled = repo_exists_or_filled || !IsEmpty(repo_path);
+
+            if (repo_exists_or_filled){
+                printf("\n\033[1;31mWARNING This repository is not empty.\033[0m\n");
+            } 
+        }
+        
+
+          
     }
 
     if (repo_exists_or_filled){
@@ -171,7 +183,8 @@ int main(int argc, char* argv[]){
         switch(ChoiceMCQ(choices, 3)){
             case 0:
                 __AddGivenFilesUsefulParts(repo_path, argv[1]);
-                __SubjectHandling(argv[1]);
+
+                __CreateSubjectElements(repo_path, argv[1]);
                 break;
             case 1:
                 break;
@@ -179,10 +192,9 @@ int main(int argc, char* argv[]){
                 if (CleanFolder(repo_path))
                     errx(EXIT_FAILURE, "ERROR Impossible to erase the datas of the folder %s, check the permissions.\n", repo_path);
 
-                
                 __UncompressGivenFiles(repo_path, argv[1]);
 
-                __SubjectHandling(argv[1]);
+                __CreateSubjectElements(repo_path, argv[1]);
                 break;
             default:
                 errx(EXIT_FAILURE, "ERROR Impossible to get the choice");
@@ -190,7 +202,8 @@ int main(int argc, char* argv[]){
     }
     else{
         __UncompressGivenFiles(repo_path, argv[1]);
-        __SubjectHandling(argv[1]);
+
+        __CreateSubjectElements(repo_path, argv[1]);
     }
 
 
@@ -198,7 +211,7 @@ int main(int argc, char* argv[]){
         // OK 1 - clean le repo
         // OK 1 - unzip given file
         // OK 3 - unzip given file et moove si pas deja dans repo -> del le reste
-        // 5 - creer éléments manquand de l'arborescence du sujet
+        // OK 5 - creer éléments manquand de l'arborescence du sujet
         // 2 - rename le repo (si pas déjà rename)
 
     // next step :
@@ -249,8 +262,114 @@ int __SubjectHandling(char* repo_name){
     return EXIT_SUCCESS;
 }
 
+int __CreateSubjectElements(char *repo_path, char *repo_name){
+    __SubjectHandling(repo_name);
+
+    char subject_path[SIZE_OF_STRING + 20];
+    snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
+
+    FILE *fp = fopen(subject_path, "r");
+    if (!fp)
+        errx(EXIT_FAILURE, "ERROR Impossible to read the subject.");
+
+    
+    if (chdir(repo_path) != 0)
+        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
+
+
+    char line[4096];
+    int started = 0;
+    int previous_num_layer = 0;
+    char name[SIZE_OF_STRING];
+
+    while (fgets(line, sizeof(line), fp))
+    {
+        char *p = line;
+        int num_layer = 0;
+
+        while (1){
+            if (*p == ' ' || *p == '\t')
+                p++;
+            else if (strncmp(p, "├", strlen("├")) == 0){
+                p += strlen("├");
+                num_layer++;
+            }
+            else if (strncmp(p, "│", strlen("│")) == 0){
+                p += strlen("│");
+                num_layer++;
+            }
+            else if (strncmp(p, "└", strlen("└")) == 0){
+                p += strlen("└");
+                num_layer++;
+            }
+            else if (strncmp(p, "─", strlen("─")) == 0){
+                p += strlen("─");
+            }
+            else
+                break;
+        }
+
+
+        if (num_layer > 0){
+            if (started){
+                // Create previous element
+                if (access(name, F_OK)){
+
+                    if (num_layer > previous_num_layer)
+                        mkdir(name, 0755);
+                    else{
+                        FILE *f = fopen(name, "w");
+                        if (f)
+                            fclose(f);
+                    }
+                }
+                
+                
+                if (num_layer > previous_num_layer){
+                    if (chdir(name) != 0)
+                        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
+                }
+
+                // Go in the right folder to create this element
+                while (num_layer < previous_num_layer){
+                    previous_num_layer--;
+
+                    if (chdir("..") != 0)
+                        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
+                }
+            }
+            else
+                started = 1;
+            
+            previous_num_layer = num_layer;
+
+            // Extract the name of the current element
+            size_t i = 0;
+            while (*p != '\n' && *p != ' ' && *p != '\t' && strncmp(p, "├", strlen("├")) 
+                    && strncmp(p, "│", strlen("│"))  && strncmp(p, "└", strlen("└"))){
+
+                name[i++] = *(p++);
+            }
+            name[i] = 0;
+        }
+        else if (started)
+            break;
+    }
+
+    fclose(fp);
+
+    char rm_suject[SIZE_OF_STRING + 30];
+    snprintf(rm_suject, sizeof(rm_suject), "rm -f %s", subject_path);
+
+    if (system(rm_suject))
+        errx(EXIT_FAILURE, "ERROR Impossible to remove the subject.");
+
+    return EXIT_SUCCESS;
+}
+
 int __UncompressGivenFiles(char *folder_path, char* repo_name){
-    __GivenFilesHandling(repo_name);
+    if (__GivenFilesHandling(repo_name) == 0)
+        return EXIT_FAILURE;
 
     const char* subject_path = GetSubjectFolderPath();
 
@@ -277,16 +396,12 @@ int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
     char temp_folder[SIZE_OF_STRING];
     snprintf(temp_folder, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), TEMPORARY_FOLDER);
 
-    char create_temp_command[SIZE_OF_STRING + 8];
-    snprintf(create_temp_command, sizeof(create_temp_command), "mkdir %s", temp_folder);
-
-    if (system (create_temp_command))
-        errx(EXIT_FAILURE, "ERROR Impossible to create folders.");
+    mkdir(temp_folder, 0755);
 
     // Copy given files elements
-    __UncompressGivenFiles(temp_folder, repo_name);
-
-    __GivenFilesCopy(temp_folder, folder_path);
+    if (__UncompressGivenFiles(temp_folder, repo_name) == 0){
+        __GivenFilesCopy(temp_folder, folder_path);
+    }
 
     // Delete temp
     char remove_temp_command[SIZE_OF_STRING + 8];
@@ -326,19 +441,15 @@ int __GivenFilesCopy(char *path_folder, char *targer_folder){
             if (S_ISDIR(st.st_mode)){
                 // Folder case
                 if (access(path_target, F_OK)){
-                    char command_create[1024 + 8];
-                    snprintf(command_create, sizeof(command_create), "mkdir %s", path_target);
-                    if (system(command_create))
-                        errx(EXIT_FAILURE, "ERROR Impossible to create folder : %s.", path_target);
+                    mkdir(path_target, 0755);
                 }
                 __GivenFilesCopy(path_temp, path_target);
             } else{
                 // File case
                 if (access(path_target, F_OK)){
-                    char command_create[1024 + 8];
-                    snprintf(command_create, sizeof(command_create), "touch %s", path_target);
-                    if (system(command_create))
-                        errx(EXIT_FAILURE, "ERROR Impossible to create file : %s.", path_target);
+                    FILE *f = fopen(path_target, "w");
+                        if (f)
+                            fclose(f);
                 }
             }
         }
