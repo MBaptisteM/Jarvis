@@ -20,7 +20,7 @@ const char *GetCommandPath(){
 }
 
 // Get the subject_path depending on how the tool has been installed
-const char *GetSubjectPath(){
+const char *GetSubjectFolderPath(){
 
     char *home_path;
     if (__GetDotJarvisPath(&home_path)){

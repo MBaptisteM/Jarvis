@@ -18,15 +18,15 @@ int main(int argc, char* argv[]){
 
 
     if (!__IsEpitaRepo(argv[1])){
-        printf("WARNING This string is not an epita repo\n");
-        printf("-> Classic clone\n");
+        printf("\033[1;31mWARNING This string is not an epita repository.\033[0m\n");
+        printf("\033[1m-> Classic clone\033[0m\n\n");
 
         size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
         snprintf(command_clone, command_size, "git clone %s", argv[1]);
 
         if(system(command_clone))
-            errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");
+            errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
 
         return EXIT_SUCCESS;
     }
@@ -72,7 +72,11 @@ int main(int argc, char* argv[]){
 
     // Bool to know if the repo is new or empty
     int repo_exists_or_filled = 0;
+    char repo_name[SIZE_OF_STRING];
 
+    size_t size_repo_path = size_main_folder_path + SIZE_OF_STRING + 2;
+    char repo_path[size_repo_path];
+    
 
 
     char *read_data;
@@ -89,18 +93,25 @@ int main(int argc, char* argv[]){
             repo_exists_or_filled = 1;
             printf("\n\033[1;31mWARNING This repository already exists.\033[0m\n");
         }
+
+        size_t i = 0;
+        while ((repo_name[i] = read_data[i]) != 0){
+            i++;
+        }
+
+        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
+
         free(read_data);
     }
 
     if (!repo_exists_or_filled){
         // CLONE
-        /*
         size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
         snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
 
         if(system(command_clone))
-            errx(EXIT_FAILURE, "ERROR Impossible to clone the repo");*/
+            errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
 
 
         // Get and save the name of the repo
@@ -108,7 +119,6 @@ int main(int argc, char* argv[]){
         //format : type/id/root... | goal format : type-id-name
         const char *local_url_repo = GetLocalUrlRepo(argv[1]);
 
-        char repo_name[SIZE_OF_STRING];
         size_t i = 0;
 
         // extract type
@@ -121,7 +131,7 @@ int main(int argc, char* argv[]){
         // extract id
         while (*local_url_repo != '/')
             repo_name[i++] = *(local_url_repo++);
-            
+
 
         repo_name[i++] = '-';
         size_t j = 0;
@@ -135,6 +145,8 @@ int main(int argc, char* argv[]){
 
         WriteInfo(argv[1], repo_name);
 
+        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
+
         // PAS argv[1] mais nom apres rename
         // Check if the clone is empty
         size_t size_repo_path = size_main_folder_path + strlen(repo_name) + 2;
@@ -145,8 +157,7 @@ int main(int argc, char* argv[]){
 
         if (repo_exists_or_filled){
             printf("\n\033[1;31mWARNING This repository is not empty.\033[0m\n");
-        }
-            
+        }   
     }
 
     if (repo_exists_or_filled){
@@ -159,13 +170,18 @@ int main(int argc, char* argv[]){
         };
         switch(ChoiceMCQ(choices, 3)){
             case 0:
-                __GivenFilesHandling(argv[1]);
+                __AddGivenFilesUsefulParts(repo_path, argv[1]);
                 __SubjectHandling(argv[1]);
                 break;
             case 1:
                 break;
             case 2:
-                __GivenFilesHandling(argv[1]);
+                if (CleanFolder(repo_path))
+                    errx(EXIT_FAILURE, "ERROR Impossible to erase the datas of the folder %s, check the permissions.\n", repo_path);
+
+                
+                __UncompressGivenFiles(repo_path, argv[1]);
+
                 __SubjectHandling(argv[1]);
                 break;
             default:
@@ -173,29 +189,25 @@ int main(int argc, char* argv[]){
         }
     }
     else{
-        __GivenFilesHandling(argv[1]);
+        __UncompressGivenFiles(repo_path, argv[1]);
         __SubjectHandling(argv[1]);
     }
 
+
+    // fonctions :
+        // OK 1 - clean le repo
+        // OK 1 - unzip given file
+        // OK 3 - unzip given file et moove si pas deja dans repo -> del le reste
+        // 5 - creer éléments manquand de l'arborescence du sujet
+        // 2 - rename le repo (si pas déjà rename)
+
+    // next step :
+        // 4 - creer si necessaire repo git root
+        // 2 - push sur repo root
+        // 2 - push sur repo local
+
+
     free(main_folder_path);
-    
-
-    // git clone <rep> <path>
-
-
-    // Chercher les dossiers dans l'arborescence
-    // Créer les dossiers si ils n'existent pas -> aller dedans sinon
-    // Clone
-
-    // Chercher le dossier download
-    // Extraire les fichiers si ils existent
-    // Si existe : dezip given files
-    // Si existe : lire le pdf + créer dossiers/fichiers + remplir .gitignore
-
-    // git add
-    // Check gestion du github si activé
-    // Clone / Push si github activé (check si clone déjà fait)
-    // Envoyer l'utilisateur dans le repo
 
     return EXIT_SUCCESS;
 }
@@ -237,6 +249,105 @@ int __SubjectHandling(char* repo_name){
     return EXIT_SUCCESS;
 }
 
+int __UncompressGivenFiles(char *folder_path, char* repo_name){
+    __GivenFilesHandling(repo_name);
+
+    const char* subject_path = GetSubjectFolderPath();
+
+    // Uncompress
+    char command_unzip[SIZE_OF_STRING];
+    snprintf(command_unzip, SIZE_OF_STRING, "tar -xvf %s/%s -C %s/", subject_path, GIVEN_FILES, folder_path);
+
+    if (system (command_unzip))
+        errx(EXIT_FAILURE, "ERROR Impossible to uncompress given files.");
+
+
+    // Remove Tar file
+    char command_remove[SIZE_OF_STRING];
+    snprintf(command_remove, SIZE_OF_STRING, "rm -rf %s/%s", subject_path, GIVEN_FILES);
+
+    if (system (command_remove))
+        errx(EXIT_FAILURE, "ERROR Impossible to remove given files zip file.");
+    
+    return EXIT_SUCCESS;
+}
+
+int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
+    // Create temp
+    char temp_folder[SIZE_OF_STRING];
+    snprintf(temp_folder, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), TEMPORARY_FOLDER);
+
+    char create_temp_command[SIZE_OF_STRING + 8];
+    snprintf(create_temp_command, sizeof(create_temp_command), "mkdir %s", temp_folder);
+
+    if (system (create_temp_command))
+        errx(EXIT_FAILURE, "ERROR Impossible to create folders.");
+
+    // Copy given files elements
+    __UncompressGivenFiles(temp_folder, repo_name);
+
+    __GivenFilesCopy(temp_folder, folder_path);
+
+    // Delete temp
+    char remove_temp_command[SIZE_OF_STRING + 8];
+    snprintf(remove_temp_command, sizeof(remove_temp_command), "rm -rf %s", temp_folder);
+
+    if (system (remove_temp_command))
+        errx(EXIT_FAILURE, "ERROR Impossible to delete folders.");
+    
+    return EXIT_SUCCESS;
+}
+
+int __GivenFilesCopy(char *path_folder, char *targer_folder){
+    DIR *dir;
+    struct dirent *entry;
+
+    dir = opendir(path_folder);
+
+    if (dir == NULL) {
+        errx(EXIT_FAILURE, "ERROR Impossible to open folder %s", path_folder);
+    }
+
+    struct stat st;
+    char path_temp[1024];
+    char path_target[1024];
+
+    while ((entry = readdir(dir)) != NULL) {
+
+        // Ignore ./ and ../
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        snprintf(path_temp, sizeof(path_temp), "%s/%s", path_folder, entry->d_name);
+
+        snprintf(path_target, sizeof(path_target), "%s/%s", targer_folder, entry->d_name);
+
+        if (stat(path_temp, &st) == 0){
+            if (S_ISDIR(st.st_mode)){
+                // Folder case
+                if (access(path_target, F_OK)){
+                    char command_create[1024 + 8];
+                    snprintf(command_create, sizeof(command_create), "mkdir %s", path_target);
+                    if (system(command_create))
+                        errx(EXIT_FAILURE, "ERROR Impossible to create folder : %s.", path_target);
+                }
+                __GivenFilesCopy(path_temp, path_target);
+            } else{
+                // File case
+                if (access(path_target, F_OK)){
+                    char command_create[1024 + 8];
+                    snprintf(command_create, sizeof(command_create), "touch %s", path_target);
+                    if (system(command_create))
+                        errx(EXIT_FAILURE, "ERROR Impossible to create file : %s.", path_target);
+                }
+            }
+        }
+    }
+
+    closedir(dir);
+    return EXIT_SUCCESS;
+}
+
 // Check if it is an epita repo
 int __IsEpitaRepo(char* repo_name){
     int i = 0;
@@ -263,10 +374,6 @@ char** __GetRelavitvePath(char *repo_name, size_t *size){
 
     while (repo_name[k] < '0' ||  repo_name[k] > '9')
         k++;
-
-    /*snprintf(relative_path, SIZE_OF_STRING, 
-            "%s%d/%s%d/", SEMESTER, (repo_name[k] - '0') * 2, 
-            BIMESTER, (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0'));*/
         
     int num_bimester = (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0');
     int num_semester = num_bimester / 2 + num_bimester % 2;

@@ -5,7 +5,7 @@ int GetSubject(char* repo_name){
 
     const char* local_url_repo = GetLocalUrlRepo(repo_name);
 
-    const char* subject_path = GetSubjectPath();
+    const char* subject_path = GetSubjectFolderPath();
 
     char auth_path[512];
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
@@ -34,7 +34,7 @@ int GetGivenFiles(char* repo_name){
 
     const char* local_url_repo = GetLocalUrlRepo(repo_name);
 
-    const char* subject_path = GetSubjectPath();
+    const char* subject_path = GetSubjectFolderPath();
 
     char auth_path[512];
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
@@ -63,7 +63,7 @@ int GetGivenFiles(char* repo_name){
 int Login(){
     char cmd[1024];
 
-    const char* subject_path = GetSubjectPath();
+    const char* subject_path = GetSubjectFolderPath();
 
     char auth_path[512];
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);

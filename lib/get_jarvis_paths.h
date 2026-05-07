@@ -9,7 +9,7 @@
 #define INFORMATION_FILE_NAME "info_file"
 
 const char *GetCommandPath();
-const char *GetSubjectPath();
+const char *GetSubjectFolderPath();
 char *GetInfoPath();
 
 int __GetRootPath(char** path);
