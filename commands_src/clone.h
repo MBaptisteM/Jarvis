@@ -29,3 +29,5 @@ int __GivenFilesCopy(char *path_folder, char *targer_folder);
 int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name);
 int __CreateSubjectElements(char *repo_path, char *repo_name);
 char* __GetSubjectModules(char *subject_path);
+int __RenameRepo(char *repo_path, char *repo_name);
+void __PrintPages(const char *local_url_repo);

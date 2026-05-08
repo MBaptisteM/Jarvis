@@ -85,9 +85,11 @@ int main(int argc, char* argv[]){
     //format : type/id/root... | goal format : type-id-name
     const char *local_url_repo = GetLocalUrlRepo(argv[1]);
 
-    
+    int need_to_be_renamed = 0;
 
     if (already_cloned){
+        __PrintPages(local_url_repo);
+
         size_t size_old_repo_path = size_main_folder_path + strlen(read_data) + 2;
         char old_repo_path[size_old_repo_path];
         snprintf(old_repo_path, size_old_repo_path, "%s%s", main_folder_path, read_data);
@@ -108,11 +110,7 @@ int main(int argc, char* argv[]){
     }
 
     if (!repo_exists_or_filled){
-        // CLONE
-        size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
-        char command_clone[command_size];
-        snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
-
+        need_to_be_renamed = 1;
 
         // Get and save the name of the repo
 
@@ -141,13 +139,23 @@ int main(int argc, char* argv[]){
         
         repo_name[i] = 0;
 
+        __PrintPages(local_url_repo);
+
+
+        // CLONE
+        size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
+        char command_clone[command_size];
+        snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
+
+
+
         snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
 
-        // PAS argv[1] mais nom apres rename
         // Check if the clone is empty
         size_t size_repo_path = size_main_folder_path + strlen(repo_name) + 2;
         char repo_path[size_repo_path];
         snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
+
 
 
         if(system(command_clone)){
@@ -171,9 +179,6 @@ int main(int argc, char* argv[]){
           
     }
 
-    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
-    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
-
     if (repo_exists_or_filled){
         printf("\033[1mWhat should be done ?\033[0m\n\n");
 
@@ -182,6 +187,7 @@ int main(int argc, char* argv[]){
             "Do not change the content of the repo.",
             "Erase the repo content and create the expected tree structure."
         };
+
         switch(ChoiceMCQ(choices, 3)){
             case 0:
                 __AddGivenFilesUsefulParts(repo_path, argv[1]);
@@ -189,6 +195,8 @@ int main(int argc, char* argv[]){
                 __CreateSubjectElements(repo_path, argv[1]);
                 break;
             case 1:
+                if (need_to_be_renamed)
+                    __SubjectHandling(argv[1]);
                 break;
             case 2:
                 if (CleanFolder(repo_path))
@@ -208,6 +216,9 @@ int main(int argc, char* argv[]){
         __CreateSubjectElements(repo_path, argv[1]);
     }
 
+    if (need_to_be_renamed)
+        __RenameRepo(repo_path, argv[1]);
+
 
     // fonctions :
         // OK 1 - clean le repo
@@ -225,10 +236,14 @@ int main(int argc, char* argv[]){
     free(main_folder_path);
 
 
-    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
-    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
+    __PrintPages(local_url_repo);
 
     return EXIT_SUCCESS;
+}
+
+void __PrintPages(const char *local_url_repo){
+    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
+    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
 }
 
 // Get the given files
@@ -375,7 +390,128 @@ int __CreateSubjectElements(char *repo_path, char *repo_name){
     return EXIT_SUCCESS;
 }
 
+int __RenameRepo(char *repo_path, char *repo_name){
 
+    // STUBBORN
+    char stubborn[SIZE_OF_STRING];
+    size_t i = 0;
+
+    char *c = repo_name;
+
+    // Skip useless part
+    while (*c != 0 && (*c < '0' || *c > '9'))
+        c++;
+    
+    while (*c != 0 && *c != '-')
+        c++;
+
+    if (*c == 0)
+        errx(EXIT_FAILURE, "ERROR This is not an epita repository.");
+    
+    c++;
+
+    // Letter
+    if (*c >= 'a' && *c <= 'z')
+        stubborn[i++] = *(c++) + 'A' - 'a';
+    else
+        stubborn[i++] = *(c++);
+
+    c++;
+
+    // Number
+    if (*c != '0')
+        stubborn[i++] = *c;
+    c++;
+    stubborn[i++] = *c;
+
+    stubborn[i] = 0;
+
+
+    // NAME
+    char *raw_name = NULL;
+
+    DIR *dir;
+    struct dirent *entry;
+    dir = opendir(repo_path);
+
+    if (dir == NULL) {
+        errx(EXIT_FAILURE, "ERROR Impossible to open folder %s", repo_path);
+    }
+
+    struct stat st;
+    while ((entry = readdir(dir)) != NULL){
+        // Ignore ./ and ../
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, ".git") == 0)
+            continue;
+
+        char path_new_element[1024];
+        snprintf(path_new_element, sizeof(path_new_element), "%s/%s", repo_path, entry->d_name);
+
+        if (stat(path_new_element, &st) == 0 && S_ISDIR(st.st_mode)){
+            raw_name = entry->d_name;
+            break;
+        }
+    }
+    closedir(dir);
+
+    if (raw_name == NULL)
+        errx(EXIT_FAILURE, "The repository doesn't have a valid tree structure");
+
+
+    char name[SIZE_OF_STRING];
+    i = 0;
+    int need_upper = 1;
+
+    while (*raw_name != 0){
+        if (need_upper && *raw_name != '_' && *raw_name != '-'){
+            if (*raw_name >= 'a' && *raw_name <= 'z')
+                name[i++] = *raw_name + 'A' - 'a';
+            else
+                name[i++] = *raw_name;
+
+            need_upper = 0;
+        }
+        else{
+            if (*raw_name == '_' || *raw_name == '-')
+                need_upper = 1;
+            else
+                name[i++] = *raw_name;
+        }
+        raw_name++;
+    }
+    name[i] = 0;
+    
+
+    // MODULES
+    char subject_path[SIZE_OF_STRING + 20];
+    snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
+
+    char *modules = __GetSubjectModules(subject_path);
+    if (!modules)
+        errx(EXIT_FAILURE, "Impossible to read the subject.");
+
+
+
+    // ALL TOGETHER & RENAME
+    char full_name[strlen(stubborn) + strlen(name) + strlen(modules) + 20];
+    snprintf(full_name, sizeof(full_name), "%s-%s-%s", stubborn, name, modules);
+
+
+    char rename_command[strlen(repo_path) + sizeof(full_name) + 20];
+    snprintf(rename_command, sizeof(rename_command), "mv %s %s", repo_path, full_name);
+
+    if (chdir(repo_path) != 0 || chdir("..") != 0)
+        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
+
+    if (system(rename_command))
+        errx(EXIT_FAILURE, "ERROR Impossible to rename the repo folder.");
+
+
+    WriteInfo(repo_name, full_name);
+
+
+    return EXIT_SUCCESS;
+}
 
 
 char* __GetSubjectModules(char *subject_path){
@@ -416,10 +552,10 @@ char* __GetSubjectModules(char *subject_path){
 
             if (end) {
                 *end = 0;
-                snprintf(content_h2, strlen(content_h2) + strlen(buffer), "%s%s", content_h2, buffer);
+                strcat(content_h2, buffer);
                 break;
             }
-            snprintf(content_h2, strlen(content_h2) + strlen(buffer), "%s%s", content_h2, buffer);
+            strcat(content_h2, buffer);
         }
     }
 
@@ -516,7 +652,7 @@ int __GivenFilesCopy(char *path_folder, char *targer_folder){
     char path_temp[1024];
     char path_target[1024];
 
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = readdir(dir)) != NULL){
 
         // Ignore ./ and ../
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
@@ -533,7 +669,8 @@ int __GivenFilesCopy(char *path_folder, char *targer_folder){
                     mkdir(path_target, 0755);
                 }
                 __GivenFilesCopy(path_temp, path_target);
-            } else{
+            } 
+            else{
                 // File case
                 if (access(path_target, F_OK)){
                     FILE *f = fopen(path_target, "w");
