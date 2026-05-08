@@ -82,6 +82,9 @@ int main(int argc, char* argv[]){
     char *read_data;
     int already_cloned = ReadInfo(argv[1], &read_data) == 0;
 
+    //format : type/id/root... | goal format : type-id-name
+    const char *local_url_repo = GetLocalUrlRepo(argv[1]);
+
     
 
     if (already_cloned){
@@ -113,21 +116,19 @@ int main(int argc, char* argv[]){
 
         // Get and save the name of the repo
 
-        //format : type/id/root... | goal format : type-id-name
-        const char *local_url_repo = GetLocalUrlRepo(argv[1]);
-
         size_t i = 0;
+        const char *c = local_url_repo;
 
         // extract type
-        while (*local_url_repo != '/')
-            repo_name[i++] = *(local_url_repo++);
+        while (*c != '/')
+            repo_name[i++] = *(c++);
         
-        local_url_repo++;
+        c++;
         repo_name[i++] = '-';
         
         // extract id
-        while (*local_url_repo != '/')
-            repo_name[i++] = *(local_url_repo++);
+        while (*c != '/')
+            repo_name[i++] = *(c++);
 
 
         repo_name[i++] = '-';
@@ -167,10 +168,11 @@ int main(int argc, char* argv[]){
                 printf("\n\033[1;31mWARNING This repository is not empty.\033[0m\n");
             } 
         }
-        
-
           
     }
+
+    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
+    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
 
     if (repo_exists_or_filled){
         printf("\033[1mWhat should be done ?\033[0m\n\n");
@@ -221,6 +223,10 @@ int main(int argc, char* argv[]){
 
 
     free(main_folder_path);
+
+
+    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
+    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
 
     return EXIT_SUCCESS;
 }
@@ -361,11 +367,94 @@ int __CreateSubjectElements(char *repo_path, char *repo_name){
     char rm_suject[SIZE_OF_STRING + 30];
     snprintf(rm_suject, sizeof(rm_suject), "rm -f %s", subject_path);
 
+    /*
     if (system(rm_suject))
         errx(EXIT_FAILURE, "ERROR Impossible to remove the subject.");
+    */
 
     return EXIT_SUCCESS;
 }
+
+
+
+
+char* __GetSubjectModules(char *subject_path){
+    FILE *file = fopen(subject_path, "r");
+
+    if (!file) {
+        errx(EXIT_FAILURE, "ERROR Impossible to open the subject");
+    }
+
+    char buffer[1024 + 1];
+    int found = 0;
+    char* content_h2;
+
+    while (fgets(buffer, 1024, file)){
+        char *start;
+
+        if (!found){
+            start = strstr(buffer, "<h2>");
+
+            if (start) {
+                found = 1;
+                start += 4;
+
+                char *end = strstr(start, "</h2>");
+
+                // h2 fully in the buffer
+                if (end) {
+                    *end = 0;
+                    content_h2 = start;
+                    break;
+                }
+
+                content_h2 = start;
+            }
+        } 
+        else{
+            char *end = strstr(buffer, "</h2>");
+
+            if (end) {
+                *end = 0;
+                snprintf(content_h2, strlen(content_h2) + strlen(buffer), "%s%s", content_h2, buffer);
+                break;
+            }
+            snprintf(content_h2, strlen(content_h2) + strlen(buffer), "%s%s", content_h2, buffer);
+        }
+    }
+
+    if (!found)
+        errx(EXIT_FAILURE, "ERROR Impossible to find the modules studied.");
+
+
+    char *c = content_h2;
+
+    char *modules = malloc(512);
+    size_t i = 0;
+
+    while (*c != 0){
+        if (*c == '<')
+            while (*(c++) != '>');
+
+        if (*c == ',')
+            modules[i++] = '-';
+        
+        else if (*c != ' '){
+            if (*c >= 'A' && *c <= 'Z')
+                *c -= 'A' - 'a';
+        
+            modules[i++] = *c;
+        }
+        
+        c++;
+    }
+    modules[i] = 0;
+
+    fclose(file);
+    return modules;
+}
+
+
 
 int __UncompressGivenFiles(char *folder_path, char* repo_name){
     if (__GivenFilesHandling(repo_name) == 0)

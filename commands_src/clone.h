@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <string.h>
 
 #include "info_file.h"
 #include "choice.h"
@@ -27,3 +28,4 @@ int __UncompressGivenFiles(char *folder_path, char* repo_name);
 int __GivenFilesCopy(char *path_folder, char *targer_folder);
 int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name);
 int __CreateSubjectElements(char *repo_path, char *repo_name);
+char* __GetSubjectModules(char *subject_path);
