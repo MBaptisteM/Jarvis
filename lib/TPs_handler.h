@@ -5,6 +5,8 @@
 #include <dirent.h>
 
 #include "info_file.h"
+#include "tree_structure.h"
+#include "get_jarvis_paths.h"
 
 #define TPs_FOLDER_NAME "TPs"
 #define GITIGNORE_CONTENT "# This file should be filled depending on your Tps language"

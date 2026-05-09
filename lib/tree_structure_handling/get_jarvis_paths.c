@@ -52,13 +52,23 @@ char *GetInfoPath(){
     return info_file_full_path;
 }
 
-/*
-// Get path of the main folder TPs
+
+// Get path of the main folder TPs | NULL if not found
 char *GetTPsPath(){
-    char *info_file_path;
-    ReadInfo
+    char *TPs_path = NULL;
+
+    if (!ReadInfo(NAME_PATH_INFO_FILE, &TPs_path) && access(TPs_path, F_OK) == 0)
+        return TPs_path;
+
+    TPs_path = FindMarkedFileBFS();
+    strcat(TPs_path, "/");
+
+    if (TPs_path != NULL)
+        WriteInfo(NAME_PATH_INFO_FILE, TPs_path);
+
+    return TPs_path;
 }
-*/
+
 
 
 // Get the path to /usr/local/lib/jarvis

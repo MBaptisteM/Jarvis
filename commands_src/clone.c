@@ -82,22 +82,26 @@ int main(int argc, char* argv[]){
     char *read_data;
     int already_cloned = ReadInfo(argv[1], &read_data) == 0;
 
+
     //format : type/id/root... | goal format : type-id-name
     const char *local_url_repo = GetLocalUrlRepo(argv[1]);
 
     int need_to_be_renamed = 0;
 
     if (already_cloned){
-        __PrintPages(local_url_repo);
-
         size_t size_old_repo_path = size_main_folder_path + strlen(read_data) + 2;
         char old_repo_path[size_old_repo_path];
         snprintf(old_repo_path, size_old_repo_path, "%s%s", main_folder_path, read_data);
+        
 
         if (access(old_repo_path, F_OK) == 0){
             repo_exists_or_filled = 1;
+            
+            __PrintPages(local_url_repo);
+
             printf("\n\033[1;31mWARNING This repository already exists.\033[0m\n");
         }
+            
 
         size_t i = 0;
         while ((repo_name[i] = read_data[i]) != 0){

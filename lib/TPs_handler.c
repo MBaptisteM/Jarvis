@@ -3,14 +3,16 @@
 // Get the path to the main folder or create it
 // Example : ~/Jarvis/TPs/
 char* GetOrCreateTPsPath(){
-    char* main_folder_path;
+    char* main_folder_path = GetTPsPath();
 
-    int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, &main_folder_path);
-
-    if (is_main_folder_created == EXIT_FAILURE){
-        if (mkdir(TPs_FOLDER_NAME, 0755) && !opendir(TPs_FOLDER_NAME)){
+    if (main_folder_path == NULL){
+        if (mkdir(TPs_FOLDER_NAME, 0755) && !opendir(TPs_FOLDER_NAME))
             errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", TPs_FOLDER_NAME);
-        }
+
+        char command_mark[SIZE_OF_STRING];
+        snprintf(command_mark, sizeof(command_mark), "touch %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
+        if (system(command_mark) == 0)
+            errx(EXIT_FAILURE, "ERROR Impossible to create the file : %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
 
         char *path = getcwd(NULL, 0);
         if (path == NULL)
