@@ -34,7 +34,7 @@ int main(int argc, char* argv[]){
 
     // CREATE PATH
 
-    char* main_folder_path = __GetOrCreateMainFolderPath();
+    char* main_folder_path = GetOrCreateTPsPath();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
 
@@ -105,6 +105,9 @@ int main(int argc, char* argv[]){
         }
 
         snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
+
+        if (read_data[0] < 'A' || read_data[0] > 'Z')
+            need_to_be_renamed = 1;
 
         free(read_data);
     }
@@ -190,42 +193,34 @@ int main(int argc, char* argv[]){
 
         switch(ChoiceMCQ(choices, 3)){
             case 0:
-                __AddGivenFilesUsefulParts(repo_path, argv[1]);
+                AddGivenFilesUsefulParts(repo_path, argv[1]);
 
-                __CreateSubjectElements(repo_path, argv[1]);
+                CreateSubjectElements(repo_path, argv[1]);
                 break;
             case 1:
                 if (need_to_be_renamed)
-                    __SubjectHandling(argv[1]);
+                    SubjectDownload(argv[1]);
                 break;
             case 2:
                 if (CleanFolder(repo_path))
                     errx(EXIT_FAILURE, "ERROR Impossible to erase the datas of the folder %s, check the permissions.\n", repo_path);
 
-                __UncompressGivenFiles(repo_path, argv[1]);
+                UncompressGivenFiles(repo_path, argv[1]);
 
-                __CreateSubjectElements(repo_path, argv[1]);
+                CreateSubjectElements(repo_path, argv[1]);
                 break;
             default:
                 errx(EXIT_FAILURE, "ERROR Impossible to get the choice");
         }
     }
     else{
-        __UncompressGivenFiles(repo_path, argv[1]);
+        UncompressGivenFiles(repo_path, argv[1]);
 
-        __CreateSubjectElements(repo_path, argv[1]);
+        CreateSubjectElements(repo_path, argv[1]);
     }
 
     if (need_to_be_renamed)
         __RenameRepo(repo_path, argv[1]);
-
-
-    // fonctions :
-        // OK 1 - clean le repo
-        // OK 1 - unzip given file
-        // OK 3 - unzip given file et moove si pas deja dans repo -> del le reste
-        // OK 5 - creer éléments manquand de l'arborescence du sujet
-        // 2 - rename le repo (si pas déjà rename)
 
     // next step :
         // 4 - creer si necessaire repo git root
@@ -246,149 +241,7 @@ void __PrintPages(const char *local_url_repo){
     printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
 }
 
-// Get the given files
-// 0 : no given files | 1 : given files downloaded | else : error
-int __GivenFilesHandling(char* repo_name){
-    printf("Checking for given files...\n");
-    int given_files = GetGivenFiles(repo_name);
 
-    if (given_files != 0 && given_files != 1){
-        printf("Second try to check for given files...\n");
-        given_files = GetGivenFiles(repo_name);
-    }
-    
-    if (given_files == 0)
-        return 1;
-    else if (given_files == 1)
-        return 0;
-    errx(-1, "ERROR Impossible to get the given files (failed twice). [Retry or login again]");
-}
-
-
-// Get the subject
-int __SubjectHandling(char* repo_name){
-    printf("Trying to get the subject...\n");
-
-    int subject_result = GetSubject(repo_name);
-
-    if (subject_result){
-        printf("Second try to get the subject...\n");
-        subject_result = GetSubject(repo_name);
-    }
-
-    if (subject_result)
-        errx(EXIT_FAILURE, "ERROR Impossible to get the subject (failed twice). [Retry or login again]");
-
-    printf("\033[32mSubject downloaded.\033[0m\n");
-    return EXIT_SUCCESS;
-}
-
-int __CreateSubjectElements(char *repo_path, char *repo_name){
-    __SubjectHandling(repo_name);
-
-    char subject_path[SIZE_OF_STRING + 20];
-    snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
-
-    FILE *fp = fopen(subject_path, "r");
-    if (!fp)
-        errx(EXIT_FAILURE, "ERROR Impossible to read the subject.");
-
-    
-    if (chdir(repo_path) != 0)
-        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
-
-
-    char line[4096];
-    int started = 0;
-    int previous_num_layer = 0;
-    char name[SIZE_OF_STRING];
-
-    while (fgets(line, sizeof(line), fp))
-    {
-        char *p = line;
-        int num_layer = 0;
-
-        while (1){
-            if (*p == ' ' || *p == '\t')
-                p++;
-            else if (strncmp(p, "├", strlen("├")) == 0){
-                p += strlen("├");
-                num_layer++;
-            }
-            else if (strncmp(p, "│", strlen("│")) == 0){
-                p += strlen("│");
-                num_layer++;
-            }
-            else if (strncmp(p, "└", strlen("└")) == 0){
-                p += strlen("└");
-                num_layer++;
-            }
-            else if (strncmp(p, "─", strlen("─")) == 0){
-                p += strlen("─");
-            }
-            else
-                break;
-        }
-
-
-        if (num_layer > 0){
-            if (started){
-                // Create previous element
-                if (access(name, F_OK)){
-
-                    if (num_layer > previous_num_layer)
-                        mkdir(name, 0755);
-                    else{
-                        FILE *f = fopen(name, "w");
-                        if (f)
-                            fclose(f);
-                    }
-                }
-                
-                
-                if (num_layer > previous_num_layer){
-                    if (chdir(name) != 0)
-                        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
-                }
-
-                // Go in the right folder to create this element
-                while (num_layer < previous_num_layer){
-                    previous_num_layer--;
-
-                    if (chdir("..") != 0)
-                        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
-                }
-            }
-            else
-                started = 1;
-            
-            previous_num_layer = num_layer;
-
-            // Extract the name of the current element
-            size_t i = 0;
-            while (*p != '\n' && *p != ' ' && *p != '\t' && strncmp(p, "├", strlen("├")) 
-                    && strncmp(p, "│", strlen("│"))  && strncmp(p, "└", strlen("└"))){
-
-                name[i++] = *(p++);
-            }
-            name[i] = 0;
-        }
-        else if (started)
-            break;
-    }
-
-    fclose(fp);
-
-    char rm_suject[SIZE_OF_STRING + 30];
-    snprintf(rm_suject, sizeof(rm_suject), "rm -f %s", subject_path);
-
-    /*
-    if (system(rm_suject))
-        errx(EXIT_FAILURE, "ERROR Impossible to remove the subject.");
-    */
-
-    return EXIT_SUCCESS;
-}
 
 int __RenameRepo(char *repo_path, char *repo_name){
 
@@ -486,7 +339,7 @@ int __RenameRepo(char *repo_path, char *repo_name){
     char subject_path[SIZE_OF_STRING + 20];
     snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
 
-    char *modules = __GetSubjectModules(subject_path);
+    char *modules = GetSubjectModules(subject_path);
     if (!modules)
         errx(EXIT_FAILURE, "Impossible to read the subject.");
 
@@ -514,176 +367,6 @@ int __RenameRepo(char *repo_path, char *repo_name){
 }
 
 
-char* __GetSubjectModules(char *subject_path){
-    FILE *file = fopen(subject_path, "r");
-
-    if (!file) {
-        errx(EXIT_FAILURE, "ERROR Impossible to open the subject");
-    }
-
-    char buffer[1024 + 1];
-    int found = 0;
-    char* content_h2;
-
-    while (fgets(buffer, 1024, file)){
-        char *start;
-
-        if (!found){
-            start = strstr(buffer, "<h2>");
-
-            if (start) {
-                found = 1;
-                start += 4;
-
-                char *end = strstr(start, "</h2>");
-
-                // h2 fully in the buffer
-                if (end) {
-                    *end = 0;
-                    content_h2 = start;
-                    break;
-                }
-
-                content_h2 = start;
-            }
-        } 
-        else{
-            char *end = strstr(buffer, "</h2>");
-
-            if (end) {
-                *end = 0;
-                strcat(content_h2, buffer);
-                break;
-            }
-            strcat(content_h2, buffer);
-        }
-    }
-
-    if (!found)
-        errx(EXIT_FAILURE, "ERROR Impossible to find the modules studied.");
-
-
-    char *c = content_h2;
-
-    char *modules = malloc(512);
-    size_t i = 0;
-
-    while (*c != 0){
-        if (*c == '<')
-            while (*(c++) != '>');
-
-        if (*c == ',')
-            modules[i++] = '-';
-        
-        else if (*c != ' '){
-            if (*c >= 'A' && *c <= 'Z')
-                *c -= 'A' - 'a';
-        
-            modules[i++] = *c;
-        }
-        
-        c++;
-    }
-    modules[i] = 0;
-
-    fclose(file);
-    return modules;
-}
-
-
-
-int __UncompressGivenFiles(char *folder_path, char* repo_name){
-    if (__GivenFilesHandling(repo_name) == 0)
-        return EXIT_FAILURE;
-
-    const char* subject_path = GetSubjectFolderPath();
-
-    // Uncompress
-    char command_unzip[SIZE_OF_STRING];
-    snprintf(command_unzip, SIZE_OF_STRING, "tar -xvf %s/%s -C %s/", subject_path, GIVEN_FILES, folder_path);
-
-    if (system (command_unzip))
-        errx(EXIT_FAILURE, "ERROR Impossible to uncompress given files.");
-
-
-    // Remove Tar file
-    char command_remove[SIZE_OF_STRING];
-    snprintf(command_remove, SIZE_OF_STRING, "rm -rf %s/%s", subject_path, GIVEN_FILES);
-
-    if (system (command_remove))
-        errx(EXIT_FAILURE, "ERROR Impossible to remove given files zip file.");
-    
-    return EXIT_SUCCESS;
-}
-
-int __AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
-    // Create temp
-    char temp_folder[SIZE_OF_STRING];
-    snprintf(temp_folder, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), TEMPORARY_FOLDER);
-
-    mkdir(temp_folder, 0755);
-
-    // Copy given files elements
-    if (__UncompressGivenFiles(temp_folder, repo_name) == 0){
-        __GivenFilesCopy(temp_folder, folder_path);
-    }
-
-    // Delete temp
-    char remove_temp_command[SIZE_OF_STRING + 8];
-    snprintf(remove_temp_command, sizeof(remove_temp_command), "rm -rf %s", temp_folder);
-
-    if (system (remove_temp_command))
-        errx(EXIT_FAILURE, "ERROR Impossible to delete folders.");
-    
-    return EXIT_SUCCESS;
-}
-
-int __GivenFilesCopy(char *path_folder, char *targer_folder){
-    DIR *dir;
-    struct dirent *entry;
-
-    dir = opendir(path_folder);
-
-    if (dir == NULL) {
-        errx(EXIT_FAILURE, "ERROR Impossible to open folder %s", path_folder);
-    }
-
-    struct stat st;
-    char path_temp[1024];
-    char path_target[1024];
-
-    while ((entry = readdir(dir)) != NULL){
-
-        // Ignore ./ and ../
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue;
-
-        snprintf(path_temp, sizeof(path_temp), "%s/%s", path_folder, entry->d_name);
-
-        snprintf(path_target, sizeof(path_target), "%s/%s", targer_folder, entry->d_name);
-
-        if (stat(path_temp, &st) == 0){
-            if (S_ISDIR(st.st_mode)){
-                // Folder case
-                if (access(path_target, F_OK)){
-                    mkdir(path_target, 0755);
-                }
-                __GivenFilesCopy(path_temp, path_target);
-            } 
-            else{
-                // File case
-                if (access(path_target, F_OK)){
-                    FILE *f = fopen(path_target, "w");
-                        if (f)
-                            fclose(f);
-                }
-            }
-        }
-    }
-
-    closedir(dir);
-    return EXIT_SUCCESS;
-}
 
 // Check if it is an epita repo
 int __IsEpitaRepo(char* repo_name){
@@ -729,47 +412,6 @@ char** __GetRelavitvePath(char *repo_name, size_t *size){
 
     (void)size;
     return relative_path;
-}
-
-// Get the path to the main folder or create it
-// Example : ~/Jarvis/TPs/
-char* __GetOrCreateMainFolderPath(){
-    char* main_folder_path;
-
-    int is_main_folder_created = ReadInfo(NAME_PATH_INFO_FILE, &main_folder_path);
-
-    if (is_main_folder_created == EXIT_FAILURE){
-        if (mkdir(MAIN_FOLDER, 0755) && !opendir(MAIN_FOLDER)){
-            errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", MAIN_FOLDER);
-        }
-
-        char *path = getcwd(NULL, 0);
-        if (path == NULL)
-            return NULL;
-        
-        size_t path_size = 0;
-        while (path[path_size] != '\0')
-            path_size++;
-
-        size_t main_folder_size = 0;
-        while (MAIN_FOLDER[main_folder_size])
-            main_folder_size++;
-
-        size_t total_size = path_size + main_folder_size + 3;
-
-        path = realloc(path, total_size);
-
-        char* final_path = malloc(total_size);
-        snprintf(final_path, total_size, "%s/%s/", path, MAIN_FOLDER);
-
-        free(path);
-        
-        WriteInfo(NAME_PATH_INFO_FILE, final_path);
-
-        return final_path;
-    }
-
-    return main_folder_path;
 }
 
 

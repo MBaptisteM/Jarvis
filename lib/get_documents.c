@@ -1,4 +1,4 @@
-#include <get_subject.h>
+#include <get_documents.h>
 
 // log and save the subject
 int GetSubject(char* repo_name){

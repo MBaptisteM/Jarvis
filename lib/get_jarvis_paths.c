@@ -52,6 +52,13 @@ char *GetInfoPath(){
     return info_file_full_path;
 }
 
+/*
+// Get path of the main folder TPs
+char *GetTPsPath(){
+    char *info_file_path;
+    ReadInfo
+}
+*/
 
 
 // Get the path to /usr/local/lib/jarvis

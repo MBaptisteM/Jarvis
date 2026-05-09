@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <string.h>
 
+#include "get_jarvis_paths.h"
 
 #define NAME_PATH_INFO_FILE "main_path"
 

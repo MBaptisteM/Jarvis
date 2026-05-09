@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include<err.h>
 
+#include "info_file.h"
+
 #define NAME_JARVIS_FOLDER "/.jarvis"
 #define INFORMATION_FILE_NAME "info_file"
 
