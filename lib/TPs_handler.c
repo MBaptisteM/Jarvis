@@ -55,7 +55,6 @@ void CreateRepoTPs(){
 
 
     // Create README
-    char *readme_content = "";
     snprintf(command, sizeof(command),
         "cd \"%s\" && echo \"# %s\" > README.md",
         path,

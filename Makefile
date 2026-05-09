@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -Ilib
+INC_DIRS := $(shell find lib -type d)
+CFLAGS = -Wall -Wextra -O2 $(addprefix -I,$(INC_DIRS))
 
 SRC_PATH = src
 BIN_PATH = bin
@@ -10,7 +11,7 @@ LIB_PATH = lib
 MAIN_SRC = $(SRC_PATH)/main.c
 MAIN_BIN = $(BIN_PATH)/jarvis
 
-LIB_SRCS = $(wildcard $(LIB_PATH)/*.c)
+LIB_SRCS = $(shell find $(LIB_PATH) -type f -name '*.c')
 LIB_OBJS = $(LIB_SRCS:.c=.o)
 
 CMD_SRCS = $(wildcard $(CMD_SRC_PATH)/*.c)
@@ -24,8 +25,7 @@ $(MAIN_BIN): $(MAIN_SRC) $(LIB_OBJS)
 	mkdir -p $(BIN_PATH)
 	$(CC) $(CFLAGS) $^ -o $@
 
-
-$(LIB_PATH)/%.o: $(LIB_PATH)/%.c
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 
@@ -37,6 +37,6 @@ $(CMD_PATH)/%: $(CMD_SRC_PATH)/%.c $(LIB_OBJS)
 clean:
 	rm -f $(MAIN_BIN)
 	rm -f $(CMD_BINS)
-	rm -f $(LIB_OBJS)
+	find $(LIB_PATH) -name '*.o' -delete
 
 .PHONY: all clean
