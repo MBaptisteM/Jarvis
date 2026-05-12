@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #include "given_files_handling.h"
 #include "subject_handling.h"

@@ -77,7 +77,7 @@ const fs = require('fs');
 
       // No file to download
       if (response.status() === 404) {
-        console.error("No given file for this TP.");
+        // console.error("No given file for this TP.");
         await browser.close();
         process.exit(1);
       }
@@ -97,7 +97,7 @@ const fs = require('fs');
 
       fs.writeFileSync(filePath, buffer);
 
-      console.log(`\x1b[32mGiven files downloaded.\x1b[0m`);
+      // console.log(`\x1b[32mGiven files downloaded.\x1b[0m`);
 
     } catch (err) {
       console.error("ERROR Impossible to get the given files :", err.message);

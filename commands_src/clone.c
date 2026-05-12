@@ -4,13 +4,6 @@
 // baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
 // https://intra.forge.epita.fr/epita-prepa-computer-science/prog-101-p-00-2029/root/prog-101-p-00-2029
 
-// https://intra.forge.epita.fr/ + {epita-prepa-computer-science/prog-208-p-05-2029/} + root/ + {prog-208-p-05-2029}
-// -> connexion au site internet -> récupère subject + given files
-
-// Créer un fichier jarvis (qui sert de repere pour connaitre la base)
-// Stocker l'avancée de chaque push des repos
-// Stocker le chemin vers ce fichier dans un autre fichier dont je connais toujours l'emplacement
-
 int main(int argc, char* argv[]){
     // Check if there is a git remote
     if (argc < 2)
@@ -30,10 +23,29 @@ int main(int argc, char* argv[]){
 
         return EXIT_SUCCESS;
     }
+
+    // Preload subject and given files
+    pid_t pid_get_given_files = fork();
+    if (pid_get_given_files == 0){
+        int given_files_return_value = GivenFilesDownload(argv[1]);
+
+        if (given_files_return_value == -1)
+            errx(EXIT_FAILURE, "ERROR Impossible to get the given files, check your connection or try to login again.");
+
+        exit(given_files_return_value);
+    }
+
+    pid_t pid_get_subjects = fork();
+    if (pid_get_subjects == 0){
+
+        if (SubjectDownload(argv[1]))
+            errx(EXIT_FAILURE, "ERROR Impossible to get the subjects, check your connection or try to login again.");
+            
+        exit(EXIT_SUCCESS);
+    }
     
 
     // CREATE PATH
-
     char* main_folder_path = GetOrCreateTPsPath();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
@@ -120,7 +132,6 @@ int main(int argc, char* argv[]){
         need_to_be_renamed = 1;
 
         // Get and save the name of the repo
-
         size_t i = 0;
         const char *c = local_url_repo;
 
@@ -139,12 +150,16 @@ int main(int argc, char* argv[]){
         repo_name[i++] = '-';
         size_t j = 0;
 
+
         //extract name from name@git...
         while (argv[1][j] != '@')
             repo_name[i++] = argv[1][j++];
             
         
         repo_name[i] = 0;
+
+
+        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
 
         __PrintPages(local_url_repo);
 
@@ -155,16 +170,7 @@ int main(int argc, char* argv[]){
         snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
 
 
-
-        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
-
         // Check if the clone is empty
-        size_t size_repo_path = size_main_folder_path + strlen(repo_name) + 2;
-        char repo_path[size_repo_path];
-        snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, repo_name);
-
-
-
         if(system(command_clone)){
             // Handle error in previous execution
             if (access(repo_path, F_OK) == 0){
@@ -186,6 +192,7 @@ int main(int argc, char* argv[]){
           
     }
 
+
     if (repo_exists_or_filled){
         printf("\033[1mWhat should be done ?\033[0m\n\n");
 
@@ -197,30 +204,40 @@ int main(int argc, char* argv[]){
 
         switch(ChoiceMCQ(choices, 3)){
             case 0:
-                AddGivenFilesUsefulParts(repo_path, argv[1]);
+                AddGivenFilesUsefulParts(repo_path, pid_get_given_files);
 
-                CreateSubjectElements(repo_path, argv[1]);
+                CreateSubjectElements(repo_path, pid_get_subjects);
                 break;
             case 1:
-                if (need_to_be_renamed)
-                    SubjectDownload(argv[1]);
+                kill(pid_get_given_files, SIGKILL);
+
+                if (need_to_be_renamed){
+                    waitpid(pid_get_subjects, NULL, 0);
+                    printf("\033[32mSubject downloaded.\033[0m\n");
+                }
+                else{
+                    kill(pid_get_subjects, SIGKILL);
+                    waitpid(pid_get_subjects, NULL, 0);
+                }
+                waitpid(pid_get_given_files, NULL, 0);
+
                 break;
             case 2:
                 if (CleanFolder(repo_path))
                     errx(EXIT_FAILURE, "ERROR Impossible to erase the datas of the folder %s, check the permissions.\n", repo_path);
 
-                UncompressGivenFiles(repo_path, argv[1]);
+                UncompressGivenFiles(repo_path, pid_get_given_files);
 
-                CreateSubjectElements(repo_path, argv[1]);
+                CreateSubjectElements(repo_path, pid_get_subjects);
                 break;
             default:
                 errx(EXIT_FAILURE, "ERROR Impossible to get the choice");
         }
     }
     else{
-        UncompressGivenFiles(repo_path, argv[1]);
+        UncompressGivenFiles(repo_path, pid_get_given_files);
 
-        CreateSubjectElements(repo_path, argv[1]);
+        CreateSubjectElements(repo_path, pid_get_subjects);
     }
 
     if (need_to_be_renamed)

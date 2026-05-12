@@ -2,26 +2,29 @@
 
 // Get the subject
 int SubjectDownload(char* repo_name){
-    printf("Trying to get the subject...\n");
+    // printf("Trying to get the subject...\n");
 
     int subject_result = GetSubject(repo_name);
 
     if (subject_result){
-        printf("Second try to get the subject...\n");
+        // printf("Second try to get the subject...\n");
         subject_result = GetSubject(repo_name);
     }
 
     if (subject_result)
         errx(EXIT_FAILURE, "ERROR Impossible to get the subject (failed twice). [Retry or login again]");
 
-    printf("\033[32mSubject downloaded.\033[0m\n");
+    
+
+    // printf("\033[32mSubject downloaded.\033[0m\n");
     return EXIT_SUCCESS;
 }
 
 
-int CreateSubjectElements(char *repo_path, char *repo_name){
-    SubjectDownload(repo_name);
-
+int CreateSubjectElements(char *repo_path, pid_t pid){
+    waitpid(pid, NULL, 0);
+    printf("\033[32mSubject downloaded.\033[0m\n");
+    
     char subject_path[SIZE_OF_STRING + 20];
     snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
 

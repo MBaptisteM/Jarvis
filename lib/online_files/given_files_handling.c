@@ -5,11 +5,12 @@
 // Get the given files
 // 0 : no given files | 1 : given files downloaded | else : error
 int GivenFilesDownload(char* repo_name){
-    printf("Checking for given files...\n");
+    // printf("Checking for given files...\n");
+
     int given_files = GetGivenFiles(repo_name);
 
     if (given_files != 0 && given_files != 1){
-        printf("Second try to check for given files...\n");
+        // printf("Second try to check for given files...\n");
         given_files = GetGivenFiles(repo_name);
     }
     
@@ -17,11 +18,12 @@ int GivenFilesDownload(char* repo_name){
         return 1;
     else if (given_files == 1)
         return 0;
+
     errx(-1, "ERROR Impossible to get the given files (failed twice). [Retry or login again]");
 }
 
 
-int AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
+int AddGivenFilesUsefulParts(char *folder_path, pid_t pid){
     // Create temp
     char temp_folder[SIZE_OF_STRING];
     snprintf(temp_folder, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), TEMPORARY_FOLDER);
@@ -29,7 +31,7 @@ int AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
     mkdir(temp_folder, 0755);
 
     // Copy given files elements
-    if (UncompressGivenFiles(temp_folder, repo_name) == 0){
+    if (UncompressGivenFiles(temp_folder, pid) == 0){
         __GivenFilesCopy(temp_folder, folder_path);
     }
 
@@ -46,9 +48,17 @@ int AddGivenFilesUsefulParts(char *folder_path, char* repo_name){
 
 
 
-int UncompressGivenFiles(char *folder_path, char* repo_name){
-    if (GivenFilesDownload(repo_name) == 0)
+int UncompressGivenFiles(char *folder_path, pid_t pid){
+    int is_given_files_availabes;
+    waitpid(pid, &is_given_files_availabes, 0);
+
+    if (is_given_files_availabes){
+        printf("\033[32mGiven files downloaded.\033[0m\n");
+    }
+    else{
+        printf("No given files for this TP.");
         return EXIT_FAILURE;
+    }
 
     const char* subject_path = GetSubjectFolderPath();
 
@@ -56,6 +66,7 @@ int UncompressGivenFiles(char *folder_path, char* repo_name){
     char command_unzip[SIZE_OF_STRING];
     snprintf(command_unzip, SIZE_OF_STRING, "tar -xvf %s/%s -C %s/", subject_path, GIVEN_FILES, folder_path);
 
+    
     if (system (command_unzip))
         errx(EXIT_FAILURE, "ERROR Impossible to uncompress given files.");
 
