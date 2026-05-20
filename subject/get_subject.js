@@ -7,17 +7,17 @@ const fs = require('fs');
   const subject_path = process.argv[4];
 
   if (!mode || !url || !subject_path) {
-    console.error("Usage: node get_subject.js <login|run|download> <url>");
+    console.error("Usage: node get_subject.js <auth|run|download> <url>");
     process.exit(1);
   }
 
   const auth_path = subject_path + '/auth.json';
   const subject_html_path = subject_path + '/subject.html';
 
-  // Start the Login window
-  if (mode === "login") {
-    console.log("\n➡️ \x1b[1mPlease \x1b[32mconnect to your forge account.\x1b[0m");
-    console.log("➡️ \x1b[1mThen close the window.\x1b[0m");
+  // Start the Auth window
+  if (mode === "auth") {
+    console.log("\n➡️  \x1b[1mPlease \x1b[32mconnect to your forge account.\x1b[0m");
+    console.log("➡️  \x1b[1mThen close the window.\x1b[0m");
 
     const browser = await chromium.launch({ headless: false });
     const context = await browser.newContext();
@@ -27,7 +27,7 @@ const fs = require('fs');
 
     page.on('close', async () => {
       await context.storageState({ path: auth_path });
-      console.log("Login saved !");
+      console.log("Auth saved !");
 
       await browser.close();
       process.exit(0);

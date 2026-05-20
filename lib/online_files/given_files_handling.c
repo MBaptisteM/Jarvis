@@ -19,7 +19,7 @@ int GivenFilesDownload(char* repo_name){
     else if (given_files == 1)
         return 0;
 
-    errx(-1, "ERROR Impossible to get the given files (failed twice). [Retry or login again]");
+    errx(-1, "ERROR Impossible to get the given files (failed twice). [Retry or Auth again]");
 }
 
 

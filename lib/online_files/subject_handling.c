@@ -12,7 +12,7 @@ int SubjectDownload(char* repo_name){
     }
 
     if (subject_result)
-        errx(EXIT_FAILURE, "ERROR Impossible to get the subject (failed twice). [Retry or login again]");
+        errx(EXIT_FAILURE, "ERROR Impossible to get the subject (failed twice). [Retry or Auth again]");
 
     
 

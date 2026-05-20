@@ -10,9 +10,9 @@ int GetSubject(char* repo_name){
     char auth_path[512];
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
-    // If not already login
+    // If not already Auth
     if (access(auth_path, F_OK) != 0) {
-        Login();
+        Auth();
     }
 
     // Get subject
@@ -39,9 +39,9 @@ int GetGivenFiles(char* repo_name){
     char auth_path[512];
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
-    // If not already login
+    // If not already Auth
     if (access(auth_path, F_OK) != 0) {
-        Login();
+        Auth();
     }
     
     // Get given files
@@ -59,8 +59,8 @@ int GetGivenFiles(char* repo_name){
     return exit_code; // 0 : success | 1 : failure
 }
 
-// Login to forge
-int Login(){
+// Auth to forge
+int Auth(){
     char cmd[1024];
 
     const char* subject_path = GetSubjectFolderPath();
@@ -69,7 +69,7 @@ int Login(){
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
     snprintf(cmd, sizeof(cmd), 
-        "%s/./setup_get_subject login %s %s", subject_path, URL, subject_path);
+        "%s/./setup_get_subject auth %s %s", subject_path, URL, subject_path);
 
     if (system(cmd) == -1)
         errx(EXIT_FAILURE, "ERROR impossible to auth.");

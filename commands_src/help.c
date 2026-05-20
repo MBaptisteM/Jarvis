@@ -1,25 +1,102 @@
-#include <stdlib.h>
-#include <stdio.h>
+#include "help.h"
 
-int main(){
-    printf("This is a list of all Jarvis commands :\n\n");
-
-    // command 1
-    printf("test1\n\n");
-
-    // clone
-    printf("->clone\n");
-    printf("\tdescription\n");
-    printf("\tExample : jarvis clone <git remote>\n\n");
-
-    // uninstall
-    printf("->uninstall\n");
-    printf("\tTool to uninstall jarvis, there is no parameter to add\n");
-    printf("\tExample : jarvis uninstall\n");
-
-    printf("->epita\n");
-    printf("\tEnable/Disable epita repository treatment");
-    printf("\tExample : jarvis epita <bool>");
+int main(int argc, char* argv[]){
+    if (argc < 2){
+        Help();
+    }
+    else{
+        if (strcasecmp(argv[1], COMMAND_CLONE) == 0){
+            HelpClone();
+        }
+        else if (strcasecmp(argv[1], COMMAND_UNINSTALL) == 0){
+            HelpUninstall();
+        }
+        else if (strcasecmp(argv[1], COMMAND_AUTH) == 0){
+            HelpAuth();
+        }
+        else{
+            printf("└! "BOLD RED"ERROR   : Command unknown."RESET"\n\n");
+            Help();
+        }
+    }
 
     return EXIT_SUCCESS;
+}
+
+void Help(){
+    printf("\n"BOLD"COMMAND\t\tDESCRIPTION"RESET"\n");
+    printf("---------------------------------\n");
+
+    // auth
+    printf("auth\t\tCommand to authentify to an epita account.\n");
+
+    // clone
+    printf("clone\t\tCommand to clone a repo.\n");
+
+    // uninstall
+    printf("uninstall\tCommand to uninstall jarivs.\n");
+
+    // epita
+    printf("epita\t\tNot Implemented.\n");
+
+    printf("\n"BOLD"Type help <command> or <command> --help for more informations on a command."RESET"\n");
+    printf("├─ (ex : jarvis help %s)\n", COMMAND_AUTH);
+    printf("└─ (ex : jarvis %s --help)\n", COMMAND_AUTH);
+}
+
+void HelpClone(){
+    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_CLONE);
+    printf("│\n");
+    printf("│  Clone the repo.\n");
+    printf("│  Handle the tree structure of all the repos.\n");
+    printf("│  Create the tree structure of the TP if EPITA repo.\n");
+    printf("│  Push the modifications.\n");
+    printf("│  Disclaimer : 1st call may install many packages.\n");
+
+    printf("│\n├─ " BOLD "USAGE\n" RESET);
+    printf("│\n");
+    printf("│  %s <repo remote>\n", COMMAND_CLONE);
+
+    printf("│\n├─ " BOLD "EXAMPLE\n" RESET);
+    printf("│\n");
+    printf("│  jarvis %s firstname.name@git.forge.epita.fr:p/...\n", COMMAND_CLONE);
+    printf("│\n└─\n");
+}
+
+void HelpUninstall(){
+    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_UNINSTALL);
+    printf("│\n");
+    printf("│  Clone the repo.\n");
+    printf("│  Handle the tree structure of all the repos.\n");
+    printf("│  Create the tree structure of the TP if EPITA repo.\n");
+    printf("│  Push the modifications.\n");
+
+    printf("│\n├─ " BOLD "USAGE\n" RESET);
+    printf("│\n");
+    printf("│  %s (no argument)\n", COMMAND_UNINSTALL);
+    printf("│  Then write \"y\" to confirm.\n");
+
+    printf("│\n├─ " BOLD "EXAMPLE\n" RESET);
+    printf("│\n");
+    printf("│  jarvis %s\n", COMMAND_UNINSTALL);
+    printf("│\n└─\n");
+}
+
+void HelpAuth(){
+    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_AUTH);
+    printf("│\n");
+    printf("│  Opens a connection window.\n");
+    printf("│  Saves the connection cookies for the next uses.\n");
+    printf("│  Disclaimer : 1st call may install many packages.\n");
+
+    printf("│\n├─ " BOLD "USAGE\n" RESET);
+    printf("│\n");
+    printf("│  %s (no argument)\n", COMMAND_AUTH);
+    printf("│  Then connect to your account.\n");
+    printf("│  When you are connected, close the window.\n");
+
+    printf("│\n├─ " BOLD "EXAMPLE\n" RESET);
+    printf("│\n");
+    printf("│  jarvis %s\n", COMMAND_AUTH);
+    printf("│\n└─\n");
 }

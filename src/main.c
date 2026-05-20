@@ -19,6 +19,21 @@ int main(int argc, char* argv[]){
 
     // A command has been entered case : call the command if it is possible
     else{
+        if (argc > 2){
+            if (strcasecmp(argv[2], "--help") == 0 || 
+                    strcasecmp(argv[2], "-h") == 0 || 
+                    strcasecmp(argv[2], "help") == 0){
+
+                char help_path[256];
+                snprintf(help_path, sizeof(help_path), "%s/%s", GetCommandPath(), COMMAND_HELP);
+
+                if (access(help_path, X_OK) != 0)  
+                    errx(EXIT_FAILURE, "ERROR you need to select a command and command %s not found", COMMAND_HELP);
+
+                execvp(help_path, argv);
+                return 0;
+            }
+        }
         char command_path[256];
 
         snprintf(command_path, sizeof(command_path), "%s/%s", GetCommandPath(), argv[1]);

@@ -7,23 +7,58 @@ URL=$2
 SUBJECT_PATH=$3
 
 if [ -z "$URL" ] || [ -z "$MODE" ] || [ -z "$SUBJECT_PATH" ]; then
-  echo "Usage: ./get_subject <login|run> <url> <subject_path>"
-  exit 1
+    echo "Usage: ./get_subject <auth|run> <url> <subject_path>"
+    exit 1
 fi
+
+install_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+
+        if [ "$1" = "node" ] || [ "$1" = "npm" ] || [ "$1" = "npx" ]; then
+
+            if command -v apt >/dev/null 2>&1; then
+                sudo apt update
+                sudo apt install -y nodejs npm
+
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S --noconfirm nodejs npm
+
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y nodejs npm
+
+            elif command -v brew >/dev/null 2>&1; then
+                brew install node
+
+            else
+                echo "[ERROR] Cannot install $1 automatically."
+                exit 1
+            fi
+        fi
+    fi
+}
+
+install_npm_package() {
+    PACKAGE_NAME=$1
+
+    if [ ! -d "$SUBJECT_PATH/node_modules/$PACKAGE_NAME" ]; then
+        npm install "$PACKAGE_NAME" --prefix "$SUBJECT_PATH/"
+    fi
+}
+
+install_command node
+install_command npm
+install_command npx
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
-  echo "Downloading npm..."
-  npm init -y --prefix "$SUBJECT_PATH/"
+    npm init -y --prefix "$SUBJECT_PATH/"
 fi
 
-if [ ! -d "$SUBJECT_PATH/node_modules/playwright" ]; then
-  echo "Downloading Playwright..."
-  npm install playwright --prefix "$SUBJECT_PATH/"
-fi
+install_npm_package playwright
+
+npx --prefix "$SUBJECT_PATH/" playwright install-deps
 
 if [ ! -d "$HOME/.cache/ms-playwright" ]; then
-  echo "Downloading browser..."
-  npx --prefix "$SUBJECT_PATH/" playwright install
+    npx --prefix "$SUBJECT_PATH/" playwright install
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH"

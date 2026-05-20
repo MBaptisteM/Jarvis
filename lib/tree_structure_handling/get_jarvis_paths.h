@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include<err.h>
+#include <err.h>
 
 #include "info_file.h"
 #include "tree_structure.h"

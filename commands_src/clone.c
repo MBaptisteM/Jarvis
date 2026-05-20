@@ -23,6 +23,16 @@ int main(int argc, char* argv[]){
 
         return EXIT_SUCCESS;
     }
+    else{
+        // Do it here to avoid multithreading problems
+        char auth_path[512];
+        snprintf(auth_path, sizeof(auth_path), "%s/auth.json", GetSubjectFolderPath());
+
+        // If not already Auth
+        if (access(auth_path, F_OK) != 0) {
+            Auth();
+        }
+    }
 
     // Preload subject and given files
     pid_t pid_get_given_files = fork();
@@ -30,7 +40,7 @@ int main(int argc, char* argv[]){
         int given_files_return_value = GivenFilesDownload(argv[1]);
 
         if (given_files_return_value == -1)
-            errx(EXIT_FAILURE, "ERROR Impossible to get the given files, check your connection or try to login again.");
+            errx(EXIT_FAILURE, "ERROR Impossible to get the given files, check your connection or try to Auth again.");
 
         exit(given_files_return_value);
     }
@@ -39,7 +49,7 @@ int main(int argc, char* argv[]){
     if (pid_get_subjects == 0){
 
         if (SubjectDownload(argv[1]))
-            errx(EXIT_FAILURE, "ERROR Impossible to get the subjects, check your connection or try to login again.");
+            errx(EXIT_FAILURE, "ERROR Impossible to get the subjects, check your connection or try to Auth again.");
             
         exit(EXIT_SUCCESS);
     }
