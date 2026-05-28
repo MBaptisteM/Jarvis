@@ -11,7 +11,8 @@ char* GetOrCreateTPsPath(){
 
         char command_mark[SIZE_OF_STRING];
         snprintf(command_mark, sizeof(command_mark), "touch %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
-        if (system(command_mark) == 0)
+
+        if (system(command_mark))
             errx(EXIT_FAILURE, "ERROR Impossible to create the file : %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
 
         char *path = getcwd(NULL, 0);

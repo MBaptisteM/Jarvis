@@ -60,6 +60,7 @@ int main(int argc, char* argv[]){
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
 
+
     size_t size_relative_path;
     char** relative_path = __GetRelavitvePath(argv[1], &size_relative_path);
 
@@ -258,7 +259,7 @@ int main(int argc, char* argv[]){
         // 2 - push sur repo root
         // 2 - push sur repo local
 
-
+    printf("%s\n", main_folder_path);
     free(main_folder_path);
 
 

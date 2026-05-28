@@ -5,6 +5,8 @@ int main(int argc, char* argv[]){
         Help();
     }
     else{
+        printf("┌─ " BOLD "COMMAND : %s\n" RESET, argv[1]);
+
         if (strcasecmp(argv[1], COMMAND_CLONE) == 0){
             HelpClone();
         }
@@ -45,7 +47,6 @@ void Help(){
 }
 
 void HelpClone(){
-    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_CLONE);
     printf("│\n");
     printf("│  Clone the repo.\n");
     printf("│  Handle the tree structure of all the repos.\n");
@@ -64,7 +65,6 @@ void HelpClone(){
 }
 
 void HelpUninstall(){
-    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_UNINSTALL);
     printf("│\n");
     printf("│  Clone the repo.\n");
     printf("│  Handle the tree structure of all the repos.\n");
@@ -83,7 +83,6 @@ void HelpUninstall(){
 }
 
 void HelpAuth(){
-    printf("┌─ " BOLD "COMMAND : %s\n" RESET, COMMAND_AUTH);
     printf("│\n");
     printf("│  Opens a connection window.\n");
     printf("│  Saves the connection cookies for the next uses.\n");

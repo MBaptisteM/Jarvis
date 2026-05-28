@@ -61,10 +61,11 @@ char *GetTPsPath(){
         return TPs_path;
 
     TPs_path = FindMarkedFileBFS();
-    strcat(TPs_path, "/");
+    if (TPs_path == NULL)
+        return TPs_path;
 
-    if (TPs_path != NULL)
-        WriteInfo(NAME_PATH_INFO_FILE, TPs_path);
+    strcat(TPs_path, "/");
+    WriteInfo(NAME_PATH_INFO_FILE, TPs_path);
 
     return TPs_path;
 }
