@@ -1,64 +1,34 @@
 #!/bin/bash
-
-set -e
+set -euo pipefail
 
 MODE=$1
 URL=$2
 SUBJECT_PATH=$3
 
-if [ -z "$URL" ] || [ -z "$MODE" ] || [ -z "$SUBJECT_PATH" ]; then
-    echo "Usage: ./get_subject <auth|run> <url> <subject_path>"
-    exit 1
-fi
-
-install_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-
-        if [ "$1" = "node" ] || [ "$1" = "npm" ] || [ "$1" = "npx" ]; then
-
-            if command -v apt >/dev/null 2>&1; then
-                sudo apt update
-                sudo apt install -y nodejs npm
-
-            elif command -v pacman >/dev/null 2>&1; then
-                sudo pacman -S --noconfirm nodejs npm
-
-            elif command -v dnf >/dev/null 2>&1; then
-                sudo dnf install -y nodejs npm
-
-            elif command -v brew >/dev/null 2>&1; then
-                brew install node
-
-            else
-                echo "[ERROR] Cannot install $1 automatically."
-                exit 1
-            fi
-        fi
-    fi
-}
-
-install_npm_package() {
-    PACKAGE_NAME=$1
-
-    if [ ! -d "$SUBJECT_PATH/node_modules/$PACKAGE_NAME" ]; then
-        npm install "$PACKAGE_NAME" --prefix "$SUBJECT_PATH/"
-    fi
-}
-
-install_command node
-install_command npm
-install_command npx
+PLAYWRIGHT_MARKER="$SUBJECT_PATH/.playwright_setup_done"
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
     npm init -y --prefix "$SUBJECT_PATH/"
 fi
 
-install_npm_package playwright
+if [ ! -d "$SUBJECT_PATH/node_modules/playwright" ]; then
+    npm install playwright --prefix "$SUBJECT_PATH/"
+else
+    echo "Playwright already installed, skipping."
+fi
 
-npx --prefix "$SUBJECT_PATH/" playwright install-deps
+if [ ! -f "$PLAYWRIGHT_MARKER" ]; then
+    sudo -v
+    sudo env PATH="$PATH" npx --prefix "$SUBJECT_PATH/" playwright install-deps
+    touch "$PLAYWRIGHT_MARKER"
+else
+    echo "Playwright system dependencies already installed, skipping."
+fi
 
-if [ ! -d "$HOME/.cache/ms-playwright" ]; then
+if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(ls -A "$HOME/.cache/ms-playwright" 2>/dev/null)" ]; then
     npx --prefix "$SUBJECT_PATH/" playwright install
+else
+    echo "Playwright browsers already installed, skipping."
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH"
