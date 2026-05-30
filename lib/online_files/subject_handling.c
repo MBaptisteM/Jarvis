@@ -28,6 +28,8 @@ int CreateSubjectElements(char *repo_path, pid_t pid){
     char subject_path[SIZE_OF_STRING + 20];
     snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
 
+    printf("path : %s\n", subject_path);
+
     FILE *fp = fopen(subject_path, "r");
     if (!fp)
         errx(EXIT_FAILURE, "ERROR Impossible to read the subject.");

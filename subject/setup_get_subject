@@ -1,34 +1,55 @@
 #!/bin/bash
 set -euo pipefail
 
-MODE=$1
-URL=$2
-SUBJECT_PATH=$3
+MODE="${1:-}"
+URL="${2:-}"
+SUBJECT_PATH="${3:-}"
+
+if [ -z "$MODE" ] || [ -z "$URL" ] || [ -z "$SUBJECT_PATH" ]; then
+    echo "Usage: ./get_subject <auth|run> <url> <subject_path>"
+    exit 1
+fi
 
 PLAYWRIGHT_MARKER="$SUBJECT_PATH/.playwright_setup_done"
+
+NEED_SUDO=0
+NEED_PLAYWRIGHT_NPM=0
+NEED_PLAYWRIGHT_DEPS=0
+NEED_PLAYWRIGHT_BROWSERS=0
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
     npm init -y --prefix "$SUBJECT_PATH/"
 fi
 
 if [ ! -d "$SUBJECT_PATH/node_modules/playwright" ]; then
-    npm install playwright --prefix "$SUBJECT_PATH/"
-else
-    echo "Playwright already installed, skipping."
+    NEED_PLAYWRIGHT_NPM=1
 fi
 
 if [ ! -f "$PLAYWRIGHT_MARKER" ]; then
-    sudo -v
-    sudo env PATH="$PATH" npx --prefix "$SUBJECT_PATH/" playwright install-deps
-    touch "$PLAYWRIGHT_MARKER"
-else
-    echo "Playwright system dependencies already installed, skipping."
+    NEED_PLAYWRIGHT_DEPS=1
+    NEED_SUDO=1
 fi
 
 if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(ls -A "$HOME/.cache/ms-playwright" 2>/dev/null)" ]; then
+    NEED_PLAYWRIGHT_BROWSERS=1
+fi
+
+if [ "$NEED_SUDO" -eq 1 ]; then
+    echo "Administrator privileges required."
+    sudo -v
+fi
+
+if [ "$NEED_PLAYWRIGHT_NPM" -eq 1 ]; then
+    npm install playwright --prefix "$SUBJECT_PATH/"
+fi
+
+if [ "$NEED_PLAYWRIGHT_DEPS" -eq 1 ]; then
+    sudo env PATH="$PATH" npx --prefix "$SUBJECT_PATH/" playwright install-deps
+    touch "$PLAYWRIGHT_MARKER"
+fi
+
+if [ "$NEED_PLAYWRIGHT_BROWSERS" -eq 1 ]; then
     npx --prefix "$SUBJECT_PATH/" playwright install
-else
-    echo "Playwright browsers already installed, skipping."
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH"
