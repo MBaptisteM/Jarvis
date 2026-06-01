@@ -36,7 +36,7 @@ void Help(){
     printf("clone\t\tCommand to clone a repo.\n");
 
     // uninstall
-    printf("uninstall\tCommand to uninstall jarivs.\n");
+    printf("uninstall\tCommand to uninstall Jarvis.\n");
 
     // epita
     printf("epita\t\tNot Implemented.\n");

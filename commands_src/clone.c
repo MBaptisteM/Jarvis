@@ -255,12 +255,15 @@ int main(int argc, char* argv[]){
         __RenameRepo(repo_path, argv[1]);
 
     // next step :
+        // 2 - push sur repo local
         // 4 - creer si necessaire repo git root
         // 2 - push sur repo root
-        // 2 - push sur repo local
 
     printf("%s\n", main_folder_path);
     free(main_folder_path);
+
+    CreateRepoRoot();
+    PushRepoRoot();
 
 
     __PrintPages(local_url_repo);

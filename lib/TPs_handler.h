@@ -15,6 +15,6 @@
 
 char* GetOrCreateTPsPath();
 void __RunCommand(const char *command);
-void CreateRepoTPs();
-void PushRepoTPs();
+void CreateRepoRoot();
+void PushRepoRoot();
 void InstallGH();

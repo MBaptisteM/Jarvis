@@ -45,60 +45,83 @@ char* GetOrCreateTPsPath(){
 }
 
 
-// Create a private repo named REPO_NAME in root
-void CreateRepoTPs(){
-    char *path = "to_change";
+#include <err.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+void CreateRepoRoot(void)
+{
+    char *path = GetOrCreateTPsPath();
 
     InstallGH();
 
+    if (chdir(path) != 0)
+        err(EXIT_FAILURE, "chdir(%s)", path);
+
+    // Already exist check
+    if (system("git remote get-url origin > /dev/null 2>&1") == 0)
+    {
+        return;
+    }
+
+    // Initialise
+    if (access(".git", F_OK) != 0)
+        __RunCommand("git init -b main");
+
+    // Auth GitHub
+    if (system("gh auth status > /dev/null 2>&1") != 0)
+    {
+        printf("GitHub authentication required.\n");
+
+        if (system("gh auth login") != 0)
+            errx(EXIT_FAILURE, "GitHub authentication failed");
+    }
+
+    // README.md
+    FILE *f = fopen("README.md", "w");
+    if (!f)
+        err(EXIT_FAILURE, "README.md");
+
+    fputs(README_CONTENT, f);
+    fclose(f);
+
+    // .gitignore
+    f = fopen(".gitignore", "w");
+    if (!f)
+        err(EXIT_FAILURE, ".gitignore");
+
+    fputs(GITIGNORE_CONTENT, f);
+    fputs("\n**/.git\n", f);
+    fclose(f);
+
+    // Ajout des fichiers
+    __RunCommand(
+        "find . "
+        "-path './.git' -prune -o "
+        "-path '*/.git' -prune -o "
+        "-type f -print0 | xargs -0 git add --"
+    );
+
+    // Commit si nécessaire
+    if (system("git diff --cached --quiet") != 0)
+        __RunCommand("git commit -m \"Initial commit\"");
+
     char command[4096];
 
-    // git initialisation
-    __RunCommand("git init");
-
-
-    // Create README
-    snprintf(command, sizeof(command),
-        "cd \"%s\" && echo \"# %s\" > README.md",
-        path,
-        README_CONTENT);
-
-    __RunCommand(command);
-
-
-    // Create .gitignore
-    snprintf(command, sizeof(command),
-        "cd \"%s\" && echo \"# %s\" > .gitignore",
-        path,
-        GITIGNORE_CONTENT);
-
-    __RunCommand(command);
-
-    
-    // First Commit
-    snprintf(command, sizeof(command),
-        "cd \"%s\" && "
-        "git add . && "
-        "git commit -m \"Initial commit\"",
-        path);
-
-    __RunCommand(command);
-
-
-    // Create repo + push
-    snprintf(command, sizeof(command),
-        "cd \"%s\" && "
+    snprintf(
+        command,
+        sizeof(command),
         "gh repo create \"%s\" "
         "--private "
         "--source=. "
         "--remote=origin "
         "--push",
-        path,
-        REPO_NAME);
+        REPO_NAME
+    );
 
     __RunCommand(command);
 }
-
 
 void InstallGH(){
     // Check if gh exists
@@ -124,19 +147,19 @@ void InstallGH(){
 }
 
 // Push the repo located on root
-void PushRepoTPs(){
-    char *path = "to_change";
+void PushRepoRoot(){
+    char *path = GetOrCreateTPsPath();
 
-    char command[4096];
+    if (chdir(path) != 0)
+        err(EXIT_FAILURE, "chdir(%s)", path);
 
-    snprintf(command, sizeof(command),
-        "cd \"%s\" && "
-        "git add . && "
+
+    __RunCommand(
+        "git add --all");
+
+    __RunCommand(
         "git commit -m \"Auto commit\" && "
-        "git push",
-        path);
-
-    __RunCommand(command);
+        "git push");
 }
 
 

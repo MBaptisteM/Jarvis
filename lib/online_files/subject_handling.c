@@ -20,15 +20,13 @@ int SubjectDownload(char* repo_name){
     return EXIT_SUCCESS;
 }
 
-
+// TODO faire les givens dans un autre fichier et refaire arbo puis check chaque fichier et remplacer
 int CreateSubjectElements(char *repo_path, pid_t pid){
     waitpid(pid, NULL, 0);
     printf("\033[32mSubject downloaded.\033[0m\n");
     
     char subject_path[SIZE_OF_STRING + 20];
-    snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");
-
-    printf("path : %s\n", subject_path);
+    snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(), "subject.html");    
 
     FILE *fp = fopen(subject_path, "r");
     if (!fp)
