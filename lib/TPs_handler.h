@@ -20,3 +20,4 @@ int CreateRepoRoot();
 void PushRepoRoot();
 void InstallGH();
 void RestoreGitFolders();
+void PushRepo(char* repo_path);

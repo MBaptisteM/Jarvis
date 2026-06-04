@@ -197,7 +197,35 @@ void PushRepoRoot(){
     RestoreGitFolders();
 
     // Push
-    __RunCommand("git push");
+    if(system("git push")){
+        g_error_msg = "ERROR Impossible to push";
+        exit(EXIT_FAILURE);
+    }
+}
+
+void PushRepo(char* repo_path){
+    atexit(CleanupOnExit);
+
+    if (chdir(repo_path) != 0)
+        err(EXIT_FAILURE, "chdir(%s)", repo_path);
+
+    // Add
+    if(system("git add .")){
+        g_error_msg = "ERROR Impossible to add";
+        exit(EXIT_FAILURE);
+    }
+
+    // Commit
+    if(system("git commit -m \"Auto commit\"")){
+        g_error_msg = "ERROR Impossible to commit";
+        exit(EXIT_FAILURE);
+    }
+
+    // Push
+    if(system("git push")){
+        g_error_msg = "ERROR Impossible to push";
+        exit(EXIT_FAILURE);
+    }
 }
 
 void __RunCommand(const char *command)

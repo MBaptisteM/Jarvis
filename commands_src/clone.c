@@ -254,14 +254,13 @@ int main(int argc, char* argv[]){
     if (need_to_be_renamed)
         __RenameRepo(repo_path, argv[1]);
 
-    // next step :
-        // 2 - push sur repo local
-
 
     free(main_folder_path);
 
-    printf("REPO : %s\n", repo_path);
 
+    // MULTITHREADING TODO
+
+    PushRepo(repo_path);
 
     if (CreateRepoRoot())
         PushRepoRoot();
@@ -272,9 +271,6 @@ int main(int argc, char* argv[]){
     return EXIT_SUCCESS;
 }
 
-void __PushRepo(){
-
-}
 
 void __PrintPages(const char *local_url_repo){
     printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
