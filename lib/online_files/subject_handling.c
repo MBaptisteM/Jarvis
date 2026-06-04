@@ -74,7 +74,7 @@ int CreateSubjectElements(char *repo_path, pid_t pid){
             if (started){
                 // Create previous element
                 if (access(name, F_OK)){
-
+                    printf("-create element\n");
                     if (num_layer > previous_num_layer)
                         mkdir(name, 0755);
                     else{
@@ -116,6 +116,7 @@ int CreateSubjectElements(char *repo_path, pid_t pid){
             break;
     }
 
+    
     fclose(fp);
 
     char rm_suject[SIZE_OF_STRING + 30];

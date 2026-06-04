@@ -148,29 +148,26 @@ void RestoreGitFolders(){
     int ret = system("find . -type d -name '.git.backup' "
            "-exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ '{}' \\;");
     (void)ret;
-    
-    // Wait for childs
-    while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
 
 
 char *g_error_msg = NULL;
 
-static void CleanupOnExit(){
-    // Attendre tous les sous-processus
+void CleanupOnExit(){
+    // Wait for sub process
     while (waitpid(-1, NULL, WNOHANG) > 0);
     
-    // Reset propre du terminal
+    // Reset the terminal
     if (system("stty sane"))
         errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
     
-    // Réafficher le message d'erreur après le reset
+    // Show error message
     if (g_error_msg)
         fprintf(stderr, "\n%s\n", g_error_msg);
 }
 
-void PushRepoRoot(){
+int PushRepoRoot(){
     atexit(CleanupOnExit);
 
     char *path = GetOrCreateTPsPath();
@@ -183,14 +180,14 @@ void PushRepoRoot(){
                "-exec sh -c 'mv \"$1\" \"$1.backup\"' _ '{}' \\;") != 0){
         g_error_msg = "ERROR Impossible to rename .git files";
         RestoreGitFolders();
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
-    // Commit
+    // Add & Commit
     if (system("git add .") || system("git commit -m \"Auto commit\"")){
-        g_error_msg = "ERROR Impossible to commit";
+        g_error_msg = "ERROR Impossible to commit the root repo";
         RestoreGitFolders();
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
     // Restore
@@ -198,34 +195,38 @@ void PushRepoRoot(){
 
     // Push
     if(system("git push")){
-        g_error_msg = "ERROR Impossible to push";
-        exit(EXIT_FAILURE);
+        g_error_msg = "ERROR Impossible to push the root repo";
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }
 
-void PushRepo(char* repo_path){
+int PushRepo(char* repo_path){
     atexit(CleanupOnExit);
 
-    if (chdir(repo_path) != 0)
+    if (repo_path != NULL && chdir(repo_path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", repo_path);
 
     // Add
     if(system("git add .")){
-        g_error_msg = "ERROR Impossible to add";
-        exit(EXIT_FAILURE);
+        g_error_msg = "ERROR Impossible to add elements in the repo";
+        return EXIT_FAILURE;
     }
 
     // Commit
     if(system("git commit -m \"Auto commit\"")){
-        g_error_msg = "ERROR Impossible to commit";
-        exit(EXIT_FAILURE);
+        g_error_msg = "ERROR Impossible to commit the repo";
+        return EXIT_FAILURE;
     }
 
     // Push
     if(system("git push")){
-        g_error_msg = "ERROR Impossible to push";
-        exit(EXIT_FAILURE);
+        g_error_msg = "ERROR Impossible to push the repo";
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }
 
 void __RunCommand(const char *command)

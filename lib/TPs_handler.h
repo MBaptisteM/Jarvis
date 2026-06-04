@@ -17,7 +17,8 @@
 char* GetOrCreateTPsPath();
 void __RunCommand(const char *command);
 int CreateRepoRoot();
-void PushRepoRoot();
+int PushRepoRoot();
 void InstallGH();
 void RestoreGitFolders();
-void PushRepo(char* repo_path);
+int PushRepo(char* repo_path);
+void CleanupOnExit();

@@ -34,6 +34,8 @@ int main(int argc, char* argv[]){
         }
     }
 
+    atexit(CleanupOnExit);
+
     // Preload subject and given files
     pid_t pid_get_given_files = fork();
     if (pid_get_given_files == 0){
@@ -258,12 +260,27 @@ int main(int argc, char* argv[]){
     free(main_folder_path);
 
 
-    // MULTITHREADING TODO
+    pid_t pid_push_root = fork();
+    if (pid_push_root == 0){
+        if (CreateRepoRoot())
+            exit (PushRepoRoot());
 
-    PushRepo(repo_path);
+        exit(EXIT_SUCCESS);
+    }
+    else{
+        if (PushRepo(repo_path)){
+            kill(pid_push_root, SIGKILL);
+            waitpid(pid_push_root, NULL, 0);
+        }
+        else{
+            int return_pid;
+            waitpid(pid_push_root, &return_pid, 0);
 
-    if (CreateRepoRoot())
-        PushRepoRoot();
+            if (return_pid)
+                errx(EXIT_FAILURE, "ERROR Impossible to push the repo");
+        }
+    }
+
 
 
     __PrintPages(local_url_repo);
@@ -335,6 +352,7 @@ int __RenameRepo(char *repo_path, char *repo_name){
 
         char path_new_element[1024];
         snprintf(path_new_element, sizeof(path_new_element), "%s/%s", repo_path, entry->d_name);
+        
 
         if (stat(path_new_element, &st) == 0 && S_ISDIR(st.st_mode)){
             raw_name = entry->d_name;
@@ -344,7 +362,7 @@ int __RenameRepo(char *repo_path, char *repo_name){
     closedir(dir);
 
     if (raw_name == NULL)
-        errx(EXIT_FAILURE, "The repository doesn't have a valid tree structure");
+        errx(EXIT_FAILURE, "ERROR The repository doesn't have a valid tree structure");
 
 
     char name[SIZE_OF_STRING];
