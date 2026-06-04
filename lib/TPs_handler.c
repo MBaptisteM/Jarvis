@@ -153,12 +153,21 @@ void PushRepoRoot(){
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
 
+    if (system(
+        "find . -type d -name '.git' ! -path './.git' -exec mv {} {}.backup \\;"))
+        errx(EXIT_FAILURE, "ERROR Impossible to rename .git files");
 
     __RunCommand(
-        "git add --all");
+        "git add .");
 
     __RunCommand(
-        "git commit -m \"Auto commit\" && "
+        "git commit -m \"Auto commit\"");
+
+    if (system(
+        "find . -type d -name '.git.backup' -exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ {} \\;"))
+        errx(EXIT_FAILURE, "ERROR Impossible to rename .git files");
+        
+    __RunCommand(
         "git push");
 }
 

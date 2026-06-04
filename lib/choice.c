@@ -72,4 +72,6 @@ void __EnableRawMode(struct termios *orig){
 
 void __DisableRawMode(struct termios *orig){
     tcsetattr(STDIN_FILENO, TCSAFLUSH, orig);
+    if (system("stty sane"))
+        errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
 }
