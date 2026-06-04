@@ -269,7 +269,6 @@ int main(int argc, char* argv[]){
     }
     else{
         if (PushRepo(repo_path)){
-            kill(pid_push_root, SIGKILL);
             waitpid(pid_push_root, NULL, 0);
         }
         else{
@@ -352,7 +351,7 @@ int __RenameRepo(char *repo_path, char *repo_name){
 
         char path_new_element[1024];
         snprintf(path_new_element, sizeof(path_new_element), "%s/%s", repo_path, entry->d_name);
-        
+
 
         if (stat(path_new_element, &st) == 0 && S_ISDIR(st.st_mode)){
             raw_name = entry->d_name;

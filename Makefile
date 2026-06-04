@@ -1,6 +1,6 @@
 CC = gcc
-INC_DIRS := $(shell find lib -type d)
-CFLAGS = -Wall -Wextra -O2 $(addprefix -I,$(INC_DIRS))
+INC_DIRS := $(shell find lib -type d) 
+CFLAGS = -Wall -Wextra -O2 $(addprefix -I,$(INC_DIRS)) -g  #-fsanitize=address
 
 SRC_PATH = src
 BIN_PATH = bin

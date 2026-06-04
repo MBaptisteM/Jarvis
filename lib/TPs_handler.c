@@ -91,12 +91,13 @@ int CreateRepoRoot(void)
     fclose(f);
 
     // Ajout des fichiers
-    __RunCommand(
+    if (system(
         "find . "
         "-path './.git' -prune -o "
         "-path '*/.git' -prune -o "
-        "-type f -print0 | xargs -0 git add --"
-    );
+        "-type f -print0 | xargs -0 git add -- "
+        "> /dev/null 2>&1"
+    )){}
 
     // Commit si nécessaire
     if (system("git diff --cached --quiet") != 0)
@@ -117,7 +118,7 @@ int CreateRepoRoot(void)
 
     __RunCommand(command);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 void InstallGH(){
@@ -145,9 +146,11 @@ void InstallGH(){
 
 // Rename .git.backup to .git
 void RestoreGitFolders(){
-    int ret = system("find . -type d -name '.git.backup' "
-           "-exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ '{}' \\;");
-    (void)ret;
+    if (system(
+        "find . -type d -name '.git.backup' "
+        "-exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ '{}' \\; "
+        "> /dev/null 2>&1"
+    )){}
 }
 
 
@@ -176,16 +179,15 @@ int PushRepoRoot(){
         err(EXIT_FAILURE, "chdir(%s)", path);
 
     // Rename .git
-    if (system("find . -type d -name '.git' ! -path './.git' "
-               "-exec sh -c 'mv \"$1\" \"$1.backup\"' _ '{}' \\;") != 0){
-        g_error_msg = "ERROR Impossible to rename .git files";
-        RestoreGitFolders();
-        return EXIT_FAILURE;
-    }
+    if (system(
+        "find . -type d -name '.git' ! -path './.git' "
+        "-exec sh -c 'mv \"$1\" \"$1.backup\"' _ '{}' \\; "
+        "> /dev/null 2>&1"
+    )){}
 
     // Add & Commit
     if (system("git add .") || system("git commit -m \"Auto commit\"")){
-        g_error_msg = "ERROR Impossible to commit the root repo";
+        g_error_msg = "\033[31mWARNING Impossible to commit the root repo\033[0m";
         RestoreGitFolders();
         return EXIT_FAILURE;
     }
@@ -195,7 +197,7 @@ int PushRepoRoot(){
 
     // Push
     if(system("git push")){
-        g_error_msg = "ERROR Impossible to push the root repo";
+        g_error_msg = "\033[31mWARNING Impossible to push the root repo\033[0m";
         return EXIT_FAILURE;
     }
 
@@ -210,19 +212,19 @@ int PushRepo(char* repo_path){
 
     // Add
     if(system("git add .")){
-        g_error_msg = "ERROR Impossible to add elements in the repo";
+        g_error_msg = "\033[31mWARNING Impossible to add elements in the repo\033[0m";
         return EXIT_FAILURE;
     }
 
     // Commit
     if(system("git commit -m \"Auto commit\"")){
-        g_error_msg = "ERROR Impossible to commit the repo";
+        g_error_msg = "\033[31mWARNING Impossible to commit the repo\033[0m";
         return EXIT_FAILURE;
     }
 
     // Push
     if(system("git push")){
-        g_error_msg = "ERROR Impossible to push the repo";
+        g_error_msg = "\033[31mWARNING Impossible to push the repo\033[0m";
         return EXIT_FAILURE;
     }
 
