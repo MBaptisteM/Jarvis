@@ -45,12 +45,9 @@ char* GetOrCreateTPsPath(){
 }
 
 
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 
-void CreateRepoRoot(void)
+// 0 : create | 1 : already created
+int CreateRepoRoot(void)
 {
     char *path = GetOrCreateTPsPath();
 
@@ -61,9 +58,7 @@ void CreateRepoRoot(void)
 
     // Already exist check
     if (system("git remote get-url origin > /dev/null 2>&1") == 0)
-    {
-        return;
-    }
+        return 1;
 
     // Initialise
     if (access(".git", F_OK) != 0)
@@ -121,6 +116,8 @@ void CreateRepoRoot(void)
     );
 
     __RunCommand(command);
+
+    return 0;
 }
 
 void InstallGH(){
@@ -146,31 +143,62 @@ void InstallGH(){
     __RunCommand("sudo apt install -y gh"); 
 }
 
-// Push the repo located on root
+// Rename .git.backup to .git
+void RestoreGitFolders(){
+    int ret = system("find . -type d -name '.git.backup' "
+           "-exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ '{}' \\;");
+    (void)ret;
+    
+    // Wait for childs
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+
+
+char *g_error_msg = NULL;
+
+static void CleanupOnExit(){
+    // Attendre tous les sous-processus
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+    
+    // Reset propre du terminal
+    if (system("stty sane"))
+        errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
+    
+    // Réafficher le message d'erreur après le reset
+    if (g_error_msg)
+        fprintf(stderr, "\n%s\n", g_error_msg);
+}
+
 void PushRepoRoot(){
+    atexit(CleanupOnExit);
+
     char *path = GetOrCreateTPsPath();
 
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
 
-    if (system(
-        "find . -type d -name '.git' ! -path './.git' -exec mv {} {}.backup \\;"))
-        errx(EXIT_FAILURE, "ERROR Impossible to rename .git files");
+    // Rename .git
+    if (system("find . -type d -name '.git' ! -path './.git' "
+               "-exec sh -c 'mv \"$1\" \"$1.backup\"' _ '{}' \\;") != 0){
+        g_error_msg = "ERROR Impossible to rename .git files";
+        RestoreGitFolders();
+        exit(EXIT_FAILURE);
+    }
 
-    __RunCommand(
-        "git add .");
+    // Commit
+    if (system("git add .") || system("git commit -m \"Auto commit\"")){
+        g_error_msg = "ERROR Impossible to commit";
+        RestoreGitFolders();
+        exit(EXIT_FAILURE);
+    }
 
-    __RunCommand(
-        "git commit -m \"Auto commit\"");
+    // Restore
+    RestoreGitFolders();
 
-    if (system(
-        "find . -type d -name '.git.backup' -exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ {} \\;"))
-        errx(EXIT_FAILURE, "ERROR Impossible to rename .git files");
-        
-    __RunCommand(
-        "git push");
+    // Push
+    __RunCommand("git push");
 }
-
 
 void __RunCommand(const char *command)
 {

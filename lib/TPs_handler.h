@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <sys/wait.h>
 
 #include "info_file.h"
 #include "tree_structure.h"
@@ -15,6 +16,7 @@
 
 char* GetOrCreateTPsPath();
 void __RunCommand(const char *command);
-void CreateRepoRoot();
+int CreateRepoRoot();
 void PushRepoRoot();
 void InstallGH();
+void RestoreGitFolders();

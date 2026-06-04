@@ -256,19 +256,24 @@ int main(int argc, char* argv[]){
 
     // next step :
         // 2 - push sur repo local
-        // 4 - creer si necessaire repo git root
-        // 2 - push sur repo root
 
-    printf("%s\n", main_folder_path);
+
     free(main_folder_path);
 
-    CreateRepoRoot();
-    PushRepoRoot();
+    printf("REPO : %s\n", repo_path);
+
+
+    if (CreateRepoRoot())
+        PushRepoRoot();
 
 
     __PrintPages(local_url_repo);
 
     return EXIT_SUCCESS;
+}
+
+void __PushRepo(){
+
 }
 
 void __PrintPages(const char *local_url_repo){
