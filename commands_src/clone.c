@@ -34,8 +34,6 @@ int main(int argc, char* argv[]){
         }
     }
 
-    atexit(CleanupOnExit);
-
     // Preload subject and given files
     pid_t pid_get_given_files = fork();
     if (pid_get_given_files == 0){
@@ -262,8 +260,17 @@ int main(int argc, char* argv[]){
 
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
-        if (CreateRepoRoot())
-            exit (PushRepoRoot());
+        if (CreateRepoRoot()){
+            char* repo_name;
+            if (ReadInfo(argv[1], &repo_name))
+                errx(EXIT_FAILURE, "Impossible to read info file");
+            
+            char commit_name[strlen(repo_name) + SIZE_OF_STRING];
+            snprintf(commit_name, strlen(repo_name) + SIZE_OF_STRING, "Clone %s", repo_name);
+
+            exit (PushRepoRoot(commit_name));
+        }
+            
 
         exit(EXIT_SUCCESS);
     }
@@ -272,14 +279,9 @@ int main(int argc, char* argv[]){
             waitpid(pid_push_root, NULL, 0);
         }
         else{
-            int return_pid;
-            waitpid(pid_push_root, &return_pid, 0);
-
-            if (return_pid)
-                errx(EXIT_FAILURE, "ERROR Impossible to push the repo");
+            waitpid(pid_push_root, NULL, 0);
         }
     }
-
 
 
     __PrintPages(local_url_repo);
@@ -360,10 +362,13 @@ int __RenameRepo(char *repo_path, char *repo_name){
     }
     closedir(dir);
 
-    if (raw_name == NULL)
-        errx(EXIT_FAILURE, "ERROR The repository doesn't have a valid tree structure");
-
-
+    if (raw_name == NULL){
+        printf("\033[31mWARNING The repository doesn't have a valid tree structure.\033[0m\n");
+        WriteInfo(repo_name, repo_name);
+        return EXIT_FAILURE;
+    }
+        
+    
     char name[SIZE_OF_STRING];
     i = 0;
     int need_upper = 1;

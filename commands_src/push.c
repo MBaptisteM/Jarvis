@@ -9,7 +9,7 @@ int main(int argc, char* argv[]){
         // Case root
         if (strcasecmp(path, "root") == 0){
             if (CreateRepoRoot())
-                return PushRepoRoot();
+                return PushRepoRoot("TODO");
             return EXIT_SUCCESS;
         }
     }
@@ -19,7 +19,7 @@ int main(int argc, char* argv[]){
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
         if (CreateRepoRoot())
-            exit (PushRepoRoot());
+            exit (PushRepoRoot("TODO"));
 
         exit(EXIT_SUCCESS);
     }

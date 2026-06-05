@@ -90,7 +90,7 @@ int CreateRepoRoot(void)
     fputs("\n**/.git\n", f);
     fclose(f);
 
-    // Ajout des fichiers
+    // Add files
     if (system(
         "find . "
         "-path './.git' -prune -o "
@@ -99,7 +99,7 @@ int CreateRepoRoot(void)
         "> /dev/null 2>&1"
     )){}
 
-    // Commit si nécessaire
+    // Commit if necessary
     if (system("git diff --cached --quiet") != 0)
         __RunCommand("git commit -m \"Initial commit\"");
 
@@ -155,22 +155,17 @@ void RestoreGitFolders(){
 
 
 
-char *g_error_msg = NULL;
 
 void CleanupOnExit(){
     // Wait for sub process
     while (waitpid(-1, NULL, WNOHANG) > 0);
     
     // Reset the terminal
-    if (system("stty sane"))
+    if (system("stty sane") == -1)
         errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
-    
-    // Show error message
-    if (g_error_msg)
-        fprintf(stderr, "\n%s\n", g_error_msg);
 }
 
-int PushRepoRoot(){
+int PushRepoRoot(char* commit_name){
     atexit(CleanupOnExit);
 
     char *path = GetOrCreateTPsPath();
@@ -186,8 +181,11 @@ int PushRepoRoot(){
     )){}
 
     // Add & Commit
-    if (system("git add .") || system("git commit -m \"Auto commit\"")){
-        g_error_msg = "\033[31mWARNING Impossible to commit the root repo\033[0m";
+    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
+    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name), "git commit -m \"%s\"", commit_name);
+
+    if (system("git add .") || system(commit_command)){
+        printf("\033[31mWARNING Impossible to commit the root repo\033[0m\n");
         RestoreGitFolders();
         return EXIT_FAILURE;
     }
@@ -197,9 +195,11 @@ int PushRepoRoot(){
 
     // Push
     if(system("git push")){
-        g_error_msg = "\033[31mWARNING Impossible to push the root repo\033[0m";
+        printf("\033[31mWARNING Impossible to push the root repo\033[0m\n");
         return EXIT_FAILURE;
     }
+
+    printf("\033[32mRepo root sucessfuly pushed\033[0m\n");
 
     return EXIT_SUCCESS;
 }
@@ -212,21 +212,23 @@ int PushRepo(char* repo_path){
 
     // Add
     if(system("git add .")){
-        g_error_msg = "\033[31mWARNING Impossible to add elements in the repo\033[0m";
+        printf("\033[31mWARNING Impossible to add elements in the repo\033[0m\n");
         return EXIT_FAILURE;
     }
 
     // Commit
-    if(system("git commit -m \"Auto commit\"")){
-        g_error_msg = "\033[31mWARNING Impossible to commit the repo\033[0m";
+    if(system("git commit -m \"Tree structure\"")){
+        printf("\033[31mWARNING Impossible to commit the repo\033[0m\n");
         return EXIT_FAILURE;
     }
 
     // Push
     if(system("git push")){
-        g_error_msg = "\033[31mWARNING Impossible to push the repo\033[0m";
+        printf("\033[31mWARNING Impossible to push the repo\033[0m\n");
         return EXIT_FAILURE;
     }
+
+    printf("\033[32mRepo sucessfuly pushed\033[0m\n");
 
     return EXIT_SUCCESS;
 }
