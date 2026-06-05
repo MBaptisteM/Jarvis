@@ -47,8 +47,7 @@ char* GetOrCreateTPsPath(){
 
 
 // 0 : create | 1 : already created
-int CreateRepoRoot(void)
-{
+int CreateRepoRoot(void){
     char *path = GetOrCreateTPsPath();
 
     InstallGH();
@@ -204,11 +203,16 @@ int PushRepoRoot(char* commit_name){
     return EXIT_SUCCESS;
 }
 
-int PushRepo(char* repo_path){
+int PushRepo(char* repo_path, char* commit_name, char* tag){
     atexit(CleanupOnExit);
 
     if (repo_path != NULL && chdir(repo_path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", repo_path);
+    
+    char current_folder[SIZE_OF_STRING * 2];
+    if (getcwd(current_folder, sizeof(current_folder)) != NULL)
+        WriteInfo("current", current_folder);
+
 
     // Add
     if(system("git add .")){
@@ -216,17 +220,31 @@ int PushRepo(char* repo_path){
         return EXIT_FAILURE;
     }
 
+    // Tags
+    if (tag != NULL){
+        char tag_command[SIZE_OF_STRING + strlen(tag)];
+        snprintf(tag_command, SIZE_OF_STRING + strlen(tag), "git tag -ma %s", tag);
+        if(system(tag_command)){
+            printf("\033[31mWARNING Impossible to add the tags of the repo\033[0m\n");
+            return EXIT_FAILURE;
+        }
+    }
+
     // Commit
-    if(system("git commit -m \"Tree structure\"")){
+    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
+    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name), "git commit -m \"%s\"", commit_name);
+    if(system(commit_command)){
         printf("\033[31mWARNING Impossible to commit the repo\033[0m\n");
         return EXIT_FAILURE;
     }
 
     // Push
-    if(system("git push")){
+    if((tag == NULL && system("git push")) || 
+        (tag != NULL && system("git push --tags"))){
         printf("\033[31mWARNING Impossible to push the repo\033[0m\n");
         return EXIT_FAILURE;
     }
+
 
     printf("\033[32mRepo sucessfuly pushed\033[0m\n");
 

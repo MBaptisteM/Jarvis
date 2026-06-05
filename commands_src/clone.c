@@ -275,7 +275,7 @@ int main(int argc, char* argv[]){
         exit(EXIT_SUCCESS);
     }
     else{
-        if (PushRepo(repo_path)){
+        if (PushRepo(repo_path, "Tree structure", NULL)){
             waitpid(pid_push_root, NULL, 0);
         }
         else{

@@ -5,5 +5,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <ctype.h>
 
 #include "TPs_handler.h"
+#include "info_file.h"
+
+#define COMMAND_TAG "tag="
+#define COMMAND_NAME "name="
+
+int main(int argc, char* argv[]);
+void __GenerateNameCommit(char** name_commit, char* tag);

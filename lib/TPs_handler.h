@@ -20,5 +20,5 @@ int CreateRepoRoot();
 int PushRepoRoot(char* commit_name);
 void InstallGH();
 void RestoreGitFolders();
-int PushRepo(char* repo_path);
+int PushRepo(char* repo_path, char* commit_name, char* tag);
 void CleanupOnExit();
