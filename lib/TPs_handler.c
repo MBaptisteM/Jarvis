@@ -62,6 +62,7 @@ char* GetOrCreateRepoRoot(){
             char* new_path = malloc(strlen(cwd) + strlen(REPO_NAME) + 2);
             snprintf(new_path, strlen(cwd) + strlen(REPO_NAME) + 2, "%s/%s/", cwd,  REPO_NAME);
 
+            printf("<%s>", new_path);
             return new_path;
         }
 
@@ -130,6 +131,7 @@ char* GetOrCreateRepoRoot(){
 
         __RunCommand(command);
     }
+    printf("<%s>", path);
     return path;
 }
 

@@ -288,7 +288,7 @@ int main(int argc, char* argv[]){
             // Copy all the files in TPs folder
             char* TPs_path = GetTPsPath();
             char clone_path[strlen(TPs_path) + SIZE_OF_STRING];
-            snprintf(clone_path, sizeof(clone_path), "%s/%s/", TPs_path, REPO_NAME);
+            snprintf(clone_path, sizeof(clone_path), "%s/%s", TPs_path, REPO_NAME);
             MergeFodldersClone(TPs_path, clone_path);
 
             // Move the clone folder
