@@ -59,7 +59,7 @@ char* GetOrCreateRepoRoot(){
                 errx(EXIT_FAILURE, "ERROR Impossible to clone the root repo");
 
             char* cwd = getcwd(NULL, 0);
-            char* new_path = malloc(strlen(cwd) + strlen(REPO_NAME) + 2);
+            char* new_path = malloc(strlen(cwd) + strlen(REPO_NAME) + 5);
             snprintf(new_path, strlen(cwd) + strlen(REPO_NAME) + 2, "%s/%s/", cwd,  REPO_NAME);
 
             printf("<FIRST|%s>\n", new_path);
