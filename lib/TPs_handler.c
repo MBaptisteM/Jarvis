@@ -278,6 +278,9 @@ int PushRepo(char* repo_path, char* commit_name, char* tag){
         return EXIT_FAILURE;
     }
 
+    printf("<%s>", commit_command);
+    printf("<%s>", tag);
+
     // Push
     if((tag == NULL && system("git push")) || 
         (tag != NULL && system("git push --tags"))){

@@ -305,9 +305,9 @@ int main(int argc, char* argv[]){
 
                 
             //
-            char command_move[strlen(REPO_NAME) + SIZE_OF_STRING];
-            snprintf(command_move, sizeof(command_move),
-                    "mv %s ../", REPO_NAME);
+            // char command_move[strlen(REPO_NAME) + SIZE_OF_STRING];
+            // snprintf(command_move, sizeof(command_move),
+            //         "mv %s ../", REPO_NAME);
 
             // supprimer le dossier actuel
         }

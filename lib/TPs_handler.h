@@ -26,3 +26,4 @@ int PushRepo(char* repo_path, char* commit_name, char* tag);
 void CleanupOnExit();
 int AddRepoRoot();
 void __AddOneToTag(char** tag);
+void MergeFodldersClone(char* Tps_path, char* clone_path);
