@@ -5,6 +5,8 @@
 // https://intra.forge.epita.fr/epita-prepa-computer-science/prog-101-p-00-2029/root/prog-101-p-00-2029
 
 int main(int argc, char* argv[]){
+    atexit(CleanupOnExit);
+    
     // Check if there is a git remote
     if (argc < 2)
         errx(EXIT_FAILURE, "ERROR you must enter the git remote to clone your repository");
@@ -254,13 +256,19 @@ int main(int argc, char* argv[]){
     if (need_to_be_renamed)
         __RenameRepo(repo_path, argv[1]);
 
+    char* name_repo;
+    if (ReadInfo(argv[1], &name_repo))
+        errx(EXIT_FAILURE, "ERROR Impossible to read Jarvis files");
+    snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, name_repo);
+
 
     free(main_folder_path);
 
 
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
-        if (CreateRepoRoot()){
+        int return_value = CreateRepoRoot();
+        if (return_value == 1){
             char* repo_name;
             if (ReadInfo(argv[1], &repo_name))
                 errx(EXIT_FAILURE, "Impossible to read info file");
@@ -268,19 +276,44 @@ int main(int argc, char* argv[]){
             char commit_name[strlen(repo_name) + SIZE_OF_STRING];
             snprintf(commit_name, strlen(repo_name) + SIZE_OF_STRING, "Clone %s", repo_name);
 
-            exit (PushRepoRoot(commit_name));
+            exit(AddRepoRoot() || PushRepoRoot(commit_name));
         }
-            
 
-        exit(EXIT_SUCCESS);
+        exit(return_value);
     }
     else{
-        if (PushRepo(repo_path, "Tree structure", NULL)){
-            waitpid(pid_push_root, NULL, 0);
+        int result_child;
+        int result_push = PushRepo(repo_path, "Tree structure", NULL);
+
+        waitpid(pid_push_root, &result_child, 0);
+
+        // Clone case
+        if (result_child == 2){
+            // TODO
+            // Copy all the files in TPs folder
+            char* TPs_path = GetTPsPath();
+            char clone_path[strlen(TPs_path) + SIZE_OF_STRING];
+            snprintf(clone_path, sizeof(clone_path), "%s/%s", TPs_path, REPO_NAME);
+            MergeFodldersClone(TPs_path, clone_path);
+
+            // Move the clone folder
+            char command_move[strlen(REPO_NAME) + SIZE_OF_STRING];
+            snprintf(command_move, sizeof(command_move),
+                    "mv %s ../", REPO_NAME);
+            if (chdir(TPs_path) != 0 || system(command_move) != 0)
+                errx(EXIT_FAILURE, "ERROR Impossible to execute commands");
+
+                
+            //
+            char command_move[strlen(REPO_NAME) + SIZE_OF_STRING];
+            snprintf(command_move, sizeof(command_move),
+                    "mv %s ../", REPO_NAME);
+
+            // supprimer le dossier actuel
         }
-        else{
-            waitpid(pid_push_root, NULL, 0);
-        }
+
+        if (result_push == -1)
+                errx(EXIT_FAILURE, "ERROR %s no such file directory", repo_path);
     }
 
 
@@ -298,7 +331,6 @@ void __PrintPages(const char *local_url_repo){
 
 
 int __RenameRepo(char *repo_path, char *repo_name){
-
     // STUBBORN
     char stubborn[SIZE_OF_STRING];
     size_t i = 0;
@@ -356,7 +388,9 @@ int __RenameRepo(char *repo_path, char *repo_name){
 
 
         if (stat(path_new_element, &st) == 0 && S_ISDIR(st.st_mode)){
-            raw_name = entry->d_name;
+            // raw_name = entry->d_name;
+            raw_name = malloc(SIZE_OF_STRING);
+            strcpy(raw_name, entry->d_name);
             break;
         }
     }
@@ -373,24 +407,28 @@ int __RenameRepo(char *repo_path, char *repo_name){
     i = 0;
     int need_upper = 1;
 
-    while (*raw_name != 0){
-        if (need_upper && *raw_name != '_' && *raw_name != '-'){
-            if (*raw_name >= 'a' && *raw_name <= 'z')
-                name[i++] = *raw_name + 'A' - 'a';
+    c = raw_name;
+
+    while (*c != 0){
+        if (need_upper && *c != '_' && *c != '-'){
+            if (*c >= 'a' && *c <= 'z')
+                name[i++] = *c + 'A' - 'a';
             else
-                name[i++] = *raw_name;
+                name[i++] = *c;
 
             need_upper = 0;
         }
         else{
-            if (*raw_name == '_' || *raw_name == '-')
+            if (*c == '_' || *c == '-')
                 need_upper = 1;
             else
-                name[i++] = *raw_name;
+                name[i++] = *c;
         }
-        raw_name++;
+        c++;
     }
     name[i] = 0;
+
+    free(raw_name);
     
 
     // MODULES

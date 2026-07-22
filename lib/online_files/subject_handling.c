@@ -20,7 +20,7 @@ int SubjectDownload(char* repo_name){
     return EXIT_SUCCESS;
 }
 
-// TODO faire les givens dans un autre fichier et refaire arbo puis check chaque fichier et remplacer
+
 int CreateSubjectElements(char *repo_path, pid_t pid){
     waitpid(pid, NULL, 0);
     printf("\033[32mSubject downloaded.\033[0m\n");
@@ -74,7 +74,6 @@ int CreateSubjectElements(char *repo_path, pid_t pid){
             if (started){
                 // Create previous element
                 if (access(name, F_OK)){
-                    printf("-create element\n");
                     if (num_layer > previous_num_layer)
                         mkdir(name, 0755);
                     else{
@@ -188,7 +187,8 @@ char* GetSubjectModules(char *subject_path){
 
     while (*c != 0){
         if (*c == '<')
-            while (*(c++) != '>');
+            while (*c != 0 && *(c++) != '>');
+            
 
         if (*c == ',')
             modules[i++] = '-';
@@ -200,7 +200,8 @@ char* GetSubjectModules(char *subject_path){
             modules[i++] = *c;
         }
         
-        c++;
+        if (c != 0)
+            c++;
     }
     modules[i] = 0;
 

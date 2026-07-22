@@ -1,6 +1,7 @@
 CC = gcc
 INC_DIRS := $(shell find lib -type d) 
 CFLAGS = -Wall -Wextra -O2 $(addprefix -I,$(INC_DIRS))  # -g -fsanitize=address
+LDLIBS = -lm
 
 SRC_PATH = src
 BIN_PATH = bin
@@ -23,7 +24,7 @@ all: $(MAIN_BIN) $(CMD_BINS)
 
 $(MAIN_BIN): $(MAIN_SRC) $(LIB_OBJS)
 	mkdir -p $(BIN_PATH)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -31,7 +32,7 @@ $(MAIN_BIN): $(MAIN_SRC) $(LIB_OBJS)
 
 $(CMD_PATH)/%: $(CMD_SRC_PATH)/%.c $(LIB_OBJS)
 	mkdir -p $(CMD_PATH)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 
 clean:

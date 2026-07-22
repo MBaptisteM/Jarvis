@@ -95,7 +95,7 @@ Repositories are automatically classified according to:
 Example:
 
 ```text
-TPs/
+EPITA-TPs/
 ├── S1/
 │   ├── B1/
 │   │   ├── E1-Name-concept1-concept2/

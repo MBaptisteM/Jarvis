@@ -46,7 +46,7 @@ char* GetOrCreateTPsPath(){
 
 
 
-// 0 : create | 1 : already created
+// 0 : create | 1 : already created | 2 : cloned
 int CreateRepoRoot(void){
     char *path = GetOrCreateTPsPath();
 
@@ -56,8 +56,21 @@ int CreateRepoRoot(void){
         err(EXIT_FAILURE, "chdir(%s)", path);
 
     // Already exist check
-    if (system("git remote get-url origin > /dev/null 2>&1") == 0)
-        return 1;
+    char cmd_exist[SIZE_OF_STRING];
+    snprintf(cmd_exist, sizeof(cmd_exist),
+            "gh repo view \"%s\" > /dev/null 2>&1",
+            REPO_NAME);
+
+    if (system(cmd_exist) == 0){
+        snprintf(cmd_exist, sizeof(cmd_exist),
+            "gh repo clone \"%s\"",
+            REPO_NAME);
+        if (system(cmd_exist))
+            errx(EXIT_FAILURE, "ERROR Impossible to clone the root repo");
+
+        return EXIT_SUCCESS;
+    }
+
 
     // Initialise
     if (access(".git", F_OK) != 0)
@@ -146,9 +159,9 @@ void InstallGH(){
 // Rename .git.backup to .git
 void RestoreGitFolders(){
     if (system(
-        "find . -type d -name '.git.backup' "
-        "-exec sh -c 'mv \"$1\" \"${1%.backup}\"' _ '{}' \\; "
-        "> /dev/null 2>&1"
+    "find . -type d -name '.temp_renames_git' "
+    "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.git\"' _ {} \\;"
+    "> /dev/null 2>&1"
     )){}
 }
 
@@ -164,7 +177,7 @@ void CleanupOnExit(){
         errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
 }
 
-int PushRepoRoot(char* commit_name){
+int AddRepoRoot(){
     atexit(CleanupOnExit);
 
     char *path = GetOrCreateTPsPath();
@@ -175,22 +188,37 @@ int PushRepoRoot(char* commit_name){
     // Rename .git
     if (system(
         "find . -type d -name '.git' ! -path './.git' "
-        "-exec sh -c 'mv \"$1\" \"$1.backup\"' _ '{}' \\; "
+        "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.temp_renames_git\"' _ {} \\; "
         "> /dev/null 2>&1"
-    )){}
+    )) {}
 
-    // Add & Commit
-    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
-    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name), "git commit -m \"%s\"", commit_name);
-
-    if (system("git add .") || system(commit_command)){
-        printf("\033[31mWARNING Impossible to commit the root repo\033[0m\n");
+    // Add
+    if (system("git add .")){
+        printf("\033[31mWARNING Impossible to add elements in the root repo\033[0m\n");
         RestoreGitFolders();
         return EXIT_FAILURE;
     }
 
     // Restore
     RestoreGitFolders();
+
+    return EXIT_SUCCESS;
+}
+
+int PushRepoRoot(char* commit_name){
+    char *path = GetOrCreateTPsPath();
+
+    if (chdir(path) != 0)
+        err(EXIT_FAILURE, "chdir(%s)", path);
+
+    // Commit
+    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
+    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name), "git commit -m \"%s\" > /dev/null", commit_name);
+    if (system(commit_command)){
+        printf("\033[31mWARNING Impossible to commit the root repo\033[0m\n");
+        return EXIT_FAILURE;
+    }
+
 
     // Push
     if(system("git push")){
@@ -207,7 +235,7 @@ int PushRepo(char* repo_path, char* commit_name, char* tag){
     atexit(CleanupOnExit);
 
     if (repo_path != NULL && chdir(repo_path) != 0)
-        err(EXIT_FAILURE, "chdir(%s)", repo_path);
+        return -1;
     
     char current_folder[SIZE_OF_STRING * 2];
     if (getcwd(current_folder, sizeof(current_folder)) != NULL)
@@ -215,7 +243,7 @@ int PushRepo(char* repo_path, char* commit_name, char* tag){
 
 
     // Add
-    if(system("git add .")){
+    if(system("git add . ")){
         printf("\033[31mWARNING Impossible to add elements in the repo\033[0m\n");
         return EXIT_FAILURE;
     }
@@ -224,10 +252,22 @@ int PushRepo(char* repo_path, char* commit_name, char* tag){
     if (tag != NULL){
         char tag_command[SIZE_OF_STRING + strlen(tag)];
         snprintf(tag_command, SIZE_OF_STRING + strlen(tag), "git tag -ma %s", tag);
-        if(system(tag_command)){
-            printf("\033[31mWARNING Impossible to add the tags of the repo\033[0m\n");
-            return EXIT_FAILURE;
+
+        char* error_message;
+        int i = 0;
+        while (system(tag_command) && i < 50){
+            if (i == 0)
+                error_message = "\033[31mWARNING Impossible to add the tags of the repo\033[0m\n";
+            i++;
+
+            __AddOneToTag(&tag);
+
+            snprintf(tag_command, SIZE_OF_STRING + strlen(tag), "git tag -ma %s", tag);
         }
+        if (i == 50){
+            printf("%s", error_message);
+            return EXIT_FAILURE;
+        }   
     }
 
     // Commit
@@ -257,4 +297,101 @@ void __RunCommand(const char *command)
 
     if (ret != 0)
         errx(EXIT_FAILURE, "ERROR while running : %s", command);
+}
+
+
+void __AddOneToTag(char** tag){
+    char* c = *tag;
+
+    char stubborn[SIZE_OF_STRING] = "";
+
+    int i = 0;
+    char num_str[SIZE_OF_STRING];
+    while (*c != 0){
+        if (*c != '-'){
+            num_str[i++] = *c;
+        }
+        else{
+            num_str[i] = 0;
+            i = 0;
+            strcat(stubborn, num_str);
+            strcat(stubborn, "-");
+        }
+           
+        c++;
+    }
+    num_str[i] = 0;
+
+    i = 0;
+
+    int num = 0;
+    while (num_str[i] != 0){
+        num = num * 10 + num_str[i++] - '0';
+    }
+    num ++;
+
+    // free(*tag);
+    // *tag = malloc(strlen(stubborn) + log10(num) + 2);
+    snprintf(*tag, strlen(stubborn) + log10(num) + 2, "%s%d", stubborn, num);
+}
+
+
+void MergeFodldersClone(char* Tps_path, char* clone_path){
+    Queue q ={0};
+
+    Enqueue(&q, Tps_path);
+
+    while (q.front){
+        char *current_dir = Dequeue(&q);
+
+        if (!current_dir)
+            continue;
+
+        DIR *dir = opendir(current_dir);
+
+        if (!dir){
+            free(current_dir);
+            continue;
+        }
+
+        struct dirent *entry;
+
+        while ((entry = readdir(dir)) != NULL){
+            // Ignore . and ..
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                continue;
+
+            char full_path[MAX_PATH_SIZE];
+
+            snprintf(full_path, sizeof(full_path), "%s/%s",
+                    current_dir, entry->d_name);
+
+            // Folder cloned
+            if (strcmp(entry->d_name, REPO_NAME) == 0)
+                continue;
+
+            // Check if present in clone_folder else add it
+            char path_in_clone[MAX_PATH_SIZE];
+            snprintf(path_in_clone, MAX_PATH_SIZE,
+                    "%s/%s", clone_path, entry->d_name);
+
+            if (access(path_in_clone, F_OK) != 0){
+                if (IsDirectory(full_path))
+                    mkdir(path_in_clone, 0755);
+                else{
+                    FILE *f = fopen(path_in_clone, "w");
+                    if (f)
+                        fclose(f);
+                }
+            }
+
+            // Add subfolders
+            if (IsDirectory(full_path)){
+                Enqueue(&q, full_path);
+            }
+        }
+
+        closedir(dir);
+        free(current_dir);
+    }
 }

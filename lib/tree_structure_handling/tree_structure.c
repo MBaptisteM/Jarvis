@@ -52,11 +52,11 @@ int CleanFolder(char *folder_path){
 
 // Try to find the mark file, return the path if find, NULL else
 char *FindMarkedFileBFS(){
-    return __FindFileBFS(MARKED_FILE_NAME);
+    return FindFileBFS(MARKED_FILE_NAME);
 }
 
 // Try to find the file <file_to_find>, return the path if find, NULL else
-char *__FindFileBFS(const char *file_to_find){
+char *FindFileBFS(const char *file_to_find){
     const char *home = getenv("HOME");
 
     if (!home)
@@ -64,10 +64,10 @@ char *__FindFileBFS(const char *file_to_find){
 
     Queue q ={0};
 
-    __Enqueue(&q, home);
+    Enqueue(&q, home);
 
     while (q.front){
-        char *current_dir = __Dequeue(&q);
+        char *current_dir = Dequeue(&q);
 
         if (!current_dir)
             continue;
@@ -101,7 +101,7 @@ char *__FindFileBFS(const char *file_to_find){
 
                 // Clean the queue
                 while (q.front){
-                    char *tmp = __Dequeue(&q);
+                    char *tmp = Dequeue(&q);
                     free(tmp);
                 }
 
@@ -109,8 +109,8 @@ char *__FindFileBFS(const char *file_to_find){
             }
 
             // Add subfolders
-            if (__IsDirectory(full_path)){
-                __Enqueue(&q, full_path);
+            if (IsDirectory(full_path)){
+                Enqueue(&q, full_path);
             }
         }
 
@@ -122,7 +122,7 @@ char *__FindFileBFS(const char *file_to_find){
 }
 
 // Check if the given element is a directory
-int __IsDirectory(const char *path){
+int IsDirectory(const char *path){
     struct stat st;
 
     if (stat(path, &st) != 0)
@@ -132,7 +132,7 @@ int __IsDirectory(const char *path){
 }
 
 // Queue Definition for bfs
-void __Enqueue(Queue *q, const char *path){
+void Enqueue(Queue *q, const char *path){
     QueueNode *node = malloc(sizeof(QueueNode));
     if (!node)
         return;
@@ -149,7 +149,7 @@ void __Enqueue(Queue *q, const char *path){
     q->rear = node;
 }
 
-char *__Dequeue(Queue *q){
+char *Dequeue(Queue *q){
     if (!q->front)
         return NULL;
 

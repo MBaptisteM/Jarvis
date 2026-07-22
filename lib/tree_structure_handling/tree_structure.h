@@ -27,10 +27,10 @@ typedef struct{
     QueueNode *rear;
 } Queue;
 
-void __Enqueue(Queue *q, const char *path);
-char *__Dequeue(Queue *q);
+void Enqueue(Queue *q, const char *path);
+char *Dequeue(Queue *q);
 
 
-int __IsDirectory(const char *path);
+int IsDirectory(const char *path);
 char *FindMarkedFileBFS();
-char *__FindFileBFS(const char *file_to_find);
+char *FindFileBFS(const char *file_to_find);

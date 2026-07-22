@@ -14,4 +14,6 @@
 #define COMMAND_NAME "name="
 
 int main(int argc, char* argv[]);
-void __GenerateNameCommit(char** name_commit, char* tag);
+void __GetNameCommit(char** name_commit, char* path);
+void __GetTagID(char** tag, char* path);
+void __GetId(char** entry, char* path);
