@@ -139,7 +139,7 @@ int main(int argc, char* argv[]){
         exit(EXIT_FAILURE);
     }
     else{
-        if (PushRepo(path, name_commit, name_commit)){}
+        if (PushRepo(path, name_commit, tag)){}
         waitpid(pid_push_root, NULL, 0);
     }
 
