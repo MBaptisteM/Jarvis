@@ -16,9 +16,9 @@
 #define README_CONTENT "All the TPs cloned with Jarvis"
 #define REPO_NAME "EPITA-TPs"
 
-char* GetOrCreateTPsPath();
+char* GetTPsPath();
 void __RunCommand(const char *command);
-int CreateRepoRoot();
+char* GetOrCreateRepoRoot();
 int PushRepoRoot(char* commit_name);
 void InstallGH();
 void RestoreGitFolders();

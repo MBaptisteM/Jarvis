@@ -58,7 +58,7 @@ int main(int argc, char* argv[]){
     
 
     // CREATE PATH
-    char* main_folder_path = GetOrCreateTPsPath();
+    char* main_folder_path = GetOrCreateRepoRoot();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
 
@@ -267,19 +267,14 @@ int main(int argc, char* argv[]){
 
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
-        int return_value = CreateRepoRoot();
-        if (return_value == 1){
-            char* repo_name;
-            if (ReadInfo(argv[1], &repo_name))
-                errx(EXIT_FAILURE, "Impossible to read info file");
-            
-            char commit_name[strlen(repo_name) + SIZE_OF_STRING];
-            snprintf(commit_name, strlen(repo_name) + SIZE_OF_STRING, "Clone %s", repo_name);
+        char* repo_name;
+        if (ReadInfo(argv[1], &repo_name))
+            errx(EXIT_FAILURE, "Impossible to read info file");
+        
+        char commit_name[strlen(repo_name) + SIZE_OF_STRING];
+        snprintf(commit_name, strlen(repo_name) + SIZE_OF_STRING, "Clone %s", repo_name);
 
-            exit(AddRepoRoot() || PushRepoRoot(commit_name));
-        }
-
-        exit(return_value);
+        exit(AddRepoRoot() || PushRepoRoot(commit_name));
     }
     else{
         int result_child;
@@ -293,7 +288,7 @@ int main(int argc, char* argv[]){
             // Copy all the files in TPs folder
             char* TPs_path = GetTPsPath();
             char clone_path[strlen(TPs_path) + SIZE_OF_STRING];
-            snprintf(clone_path, sizeof(clone_path), "%s/%s", TPs_path, REPO_NAME);
+            snprintf(clone_path, sizeof(clone_path), "%s/%s/", TPs_path, REPO_NAME);
             MergeFodldersClone(TPs_path, clone_path);
 
             // Move the clone folder

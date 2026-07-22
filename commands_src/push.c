@@ -49,13 +49,12 @@ int main(int argc, char* argv[]){
         k++;
     }
     
-    // Push only root is path == root
+    // Push only root if path == root
     if (path != NULL && strcasecmp(path, "root") == 0){
-        if (CreateRepoRoot()){
-            return AddRepoRoot() || 
+        GetOrCreateRepoRoot();
+        return AddRepoRoot() || 
             PushRepoRoot(name_commit != NULL ? 
                         name_commit : "Manual push");
-        }
         return EXIT_SUCCESS;
     }
 
@@ -132,7 +131,7 @@ int main(int argc, char* argv[]){
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
         if (result_add == -1)
-            CreateRepoRoot();
+            GetOrCreateRepoRoot();
         else if (result_add == EXIT_SUCCESS)
             exit (PushRepoRoot(name_commit_root));
         

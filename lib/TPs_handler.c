@@ -2,135 +2,135 @@
 
 // Get the path to the main folder or create it
 // Example : ~/Jarvis/TPs/
-char* GetOrCreateTPsPath(){
-    char* main_folder_path = GetTPsPath();
+char* CreateTPsPath(){
+    if (mkdir(TPs_FOLDER_NAME, 0755) && !opendir(TPs_FOLDER_NAME))
+        errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", TPs_FOLDER_NAME);
 
-    if (main_folder_path == NULL){
-        if (mkdir(TPs_FOLDER_NAME, 0755) && !opendir(TPs_FOLDER_NAME))
-            errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s", TPs_FOLDER_NAME);
+    char command_mark[SIZE_OF_STRING];
+    snprintf(command_mark, sizeof(command_mark), "touch %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
 
-        char command_mark[SIZE_OF_STRING];
-        snprintf(command_mark, sizeof(command_mark), "touch %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
+    if (system(command_mark))
+        errx(EXIT_FAILURE, "ERROR Impossible to create the file : %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
 
-        if (system(command_mark))
-            errx(EXIT_FAILURE, "ERROR Impossible to create the file : %s/%s", TPs_FOLDER_NAME, MARKED_FILE_NAME);
+    char *path = getcwd(NULL, 0);
+    if (path == NULL)
+        return NULL;
+    
+    size_t path_size = 0;
+    while (path[path_size] != '\0')
+        path_size++;
 
-        char *path = getcwd(NULL, 0);
-        if (path == NULL)
-            return NULL;
-        
-        size_t path_size = 0;
-        while (path[path_size] != '\0')
-            path_size++;
+    size_t main_folder_size = 0;
+    while (TPs_FOLDER_NAME[main_folder_size])
+        main_folder_size++;
 
-        size_t main_folder_size = 0;
-        while (TPs_FOLDER_NAME[main_folder_size])
-            main_folder_size++;
+    size_t total_size = path_size + main_folder_size + 3;
 
-        size_t total_size = path_size + main_folder_size + 3;
+    path = realloc(path, total_size);
 
-        path = realloc(path, total_size);
+    char* final_path = malloc(total_size);
+    snprintf(final_path, total_size, "%s/%s/", path, TPs_FOLDER_NAME);
 
-        char* final_path = malloc(total_size);
-        snprintf(final_path, total_size, "%s/%s/", path, TPs_FOLDER_NAME);
+    free(path);
+    
+    WriteInfo(NAME_PATH_INFO_FILE, final_path);
 
-        free(path);
-        
-        WriteInfo(NAME_PATH_INFO_FILE, final_path);
-
-        return final_path;
-    }
-
-    return main_folder_path;
+    return final_path;
 }
 
 
 
 // 0 : create | 1 : already created | 2 : cloned
-int CreateRepoRoot(void){
-    char *path = GetOrCreateTPsPath();
+char* GetOrCreateRepoRoot(){
+    char* path = GetTPsPath();
 
-    InstallGH();
-
-    if (chdir(path) != 0)
-        err(EXIT_FAILURE, "chdir(%s)", path);
-
-    // Already exist check
-    char cmd_exist[SIZE_OF_STRING];
-    snprintf(cmd_exist, sizeof(cmd_exist),
-            "gh repo view \"%s\" > /dev/null 2>&1",
-            REPO_NAME);
-
-    if (system(cmd_exist) == 0){
+    if (path == NULL){
+        // Already exist check
+        char cmd_exist[SIZE_OF_STRING];
         snprintf(cmd_exist, sizeof(cmd_exist),
-            "gh repo clone \"%s\"",
-            REPO_NAME);
-        if (system(cmd_exist))
-            errx(EXIT_FAILURE, "ERROR Impossible to clone the root repo");
+                "gh repo view \"%s\" > /dev/null 2>&1",
+                REPO_NAME);
 
-        return EXIT_SUCCESS;
+        if (system(cmd_exist) == 0){
+            snprintf(cmd_exist, sizeof(cmd_exist),
+                "gh repo clone \"%s\"",
+                REPO_NAME);
+            if (system(cmd_exist))
+                errx(EXIT_FAILURE, "ERROR Impossible to clone the root repo");
+
+            char* cwd = getcwd(NULL, 0);
+            char* new_path = malloc(strlen(cwd) + strlen(REPO_NAME) + 2);
+            snprintf(new_path, strlen(cwd) + strlen(REPO_NAME) + 2, "%s/%s/", cwd,  REPO_NAME);
+
+            return new_path;
+        }
+
+        path = CreateTPsPath();
+
+        InstallGH();
+
+        if (chdir(path) != 0)
+            err(EXIT_FAILURE, "chdir(%s)", path);
+
+        // Initialise
+        if (access(".git", F_OK) != 0)
+            __RunCommand("git init -b main");
+
+        // Auth GitHub
+        if (system("gh auth status > /dev/null 2>&1") != 0)
+        {
+            printf("GitHub authentication required.\n");
+
+            if (system("gh auth login") != 0)
+                errx(EXIT_FAILURE, "GitHub authentication failed");
+        }
+
+        // README.md
+        FILE *f = fopen("README.md", "w");
+        if (!f)
+            err(EXIT_FAILURE, "README.md");
+
+        fputs(README_CONTENT, f);
+        fclose(f);
+
+        // .gitignore
+        f = fopen(".gitignore", "w");
+        if (!f)
+            err(EXIT_FAILURE, ".gitignore");
+
+        fputs(GITIGNORE_CONTENT, f);
+        fputs("\n**/.git\n", f);
+        fclose(f);
+
+        // Add files
+        if (system(
+            "find . "
+            "-path './.git' -prune -o "
+            "-path '*/.git' -prune -o "
+            "-type f -print0 | xargs -0 git add -- "
+            "> /dev/null 2>&1"
+        )){}
+
+        // Commit if necessary
+        if (system("git diff --cached --quiet") != 0)
+            __RunCommand("git commit -m \"Initial commit\"");
+
+        char command[4096];
+
+        snprintf(
+            command,
+            sizeof(command),
+            "gh repo create \"%s\" "
+            "--private "
+            "--source=. "
+            "--remote=origin "
+            "--push",
+            REPO_NAME
+        );
+
+        __RunCommand(command);
     }
-
-
-    // Initialise
-    if (access(".git", F_OK) != 0)
-        __RunCommand("git init -b main");
-
-    // Auth GitHub
-    if (system("gh auth status > /dev/null 2>&1") != 0)
-    {
-        printf("GitHub authentication required.\n");
-
-        if (system("gh auth login") != 0)
-            errx(EXIT_FAILURE, "GitHub authentication failed");
-    }
-
-    // README.md
-    FILE *f = fopen("README.md", "w");
-    if (!f)
-        err(EXIT_FAILURE, "README.md");
-
-    fputs(README_CONTENT, f);
-    fclose(f);
-
-    // .gitignore
-    f = fopen(".gitignore", "w");
-    if (!f)
-        err(EXIT_FAILURE, ".gitignore");
-
-    fputs(GITIGNORE_CONTENT, f);
-    fputs("\n**/.git\n", f);
-    fclose(f);
-
-    // Add files
-    if (system(
-        "find . "
-        "-path './.git' -prune -o "
-        "-path '*/.git' -prune -o "
-        "-type f -print0 | xargs -0 git add -- "
-        "> /dev/null 2>&1"
-    )){}
-
-    // Commit if necessary
-    if (system("git diff --cached --quiet") != 0)
-        __RunCommand("git commit -m \"Initial commit\"");
-
-    char command[4096];
-
-    snprintf(
-        command,
-        sizeof(command),
-        "gh repo create \"%s\" "
-        "--private "
-        "--source=. "
-        "--remote=origin "
-        "--push",
-        REPO_NAME
-    );
-
-    __RunCommand(command);
-
-    return EXIT_SUCCESS;
+    return path;
 }
 
 void InstallGH(){
@@ -180,7 +180,7 @@ void CleanupOnExit(){
 int AddRepoRoot(){
     atexit(CleanupOnExit);
 
-    char *path = GetOrCreateTPsPath();
+    char *path = GetOrCreateRepoRoot();
 
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
@@ -206,7 +206,7 @@ int AddRepoRoot(){
 }
 
 int PushRepoRoot(char* commit_name){
-    char *path = GetOrCreateTPsPath();
+    char *path = GetOrCreateRepoRoot();
 
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
