@@ -5,6 +5,14 @@ const fs = require('fs');
   const mode = process.argv[2];
   const url = process.argv[3];
   const subject_path = process.argv[4];
+  const file_name = process.argv[5] ?? null;
+
+  let other_path = process.argv[6] ?? subject_path;
+  if (other_path.trim() === ""){
+      other_path = subject_path;
+  }
+
+
 
   if (!mode || !url || !subject_path) {
     console.error("Usage: node get_subject.js <auth|run|download> <url>");
@@ -12,7 +20,9 @@ const fs = require('fs');
   }
 
   const auth_path = subject_path + '/auth.json';
-  const subject_html_path = subject_path + '/subject.html';
+  let subject_html_path = other_path + '/subject.html';
+  if (file_name != null)
+    subject_html_path = other_path + '/' + file_name;
 
   // Start the Auth window
   if (mode === "auth") {
