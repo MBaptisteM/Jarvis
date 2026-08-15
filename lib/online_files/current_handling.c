@@ -208,7 +208,11 @@ char* GetCurrentRepo(){
     if (repos_url[final_ind] == NULL)
         errx(EXIT_FAILURE, "ERROR impossible to get the value after the choice");
         
-    snprintf(final_url, SIZE_OF_STRING, "%s%s/root", "URL", repos_url[final_ind]);
+    snprintf(final_url, SIZE_OF_STRING, "%s", repos_url[final_ind]);
+
+    for (int i = 0; i < ind_urls; i++)
+        free(repos_url[i]);
+    free(repos_url);
 
 
     return ExtractRepo(final_url);
@@ -276,21 +280,21 @@ char** ExtractProjects(char *file_path, int* size){
 
 
 char* ExtractRepo(char* url){
-    if (PageDownload(url, "RepoPage.html"))
+    if (PageDownload(url, "RepoRoot.html") == EXIT_FAILURE)
         errx(EXIT_FAILURE, "ERROR impossible to download the repo page (check yout internet connection)");
 
     char file_path[SIZE_OF_STRING];
     char* dotjarvis_path;
     if (GetDotJarvisPath(&dotjarvis_path))
         errx(EXIT_FAILURE, "ERROR Impossible to find the .jarvis file");
-    snprintf(file_path, sizeof(file_path), "%s/RepoPage.html", dotjarvis_path);
+    snprintf(file_path, sizeof(file_path), "%s/RepoRoot.html", dotjarvis_path);
 
     FILE *file = fopen(file_path, "r");
 
     if (!file)
         errx(EXIT_FAILURE, "ERROR Impossible to open the file %s", file_path);
 
-    char buffer[1024 + 1];
+    char buffer[2048 + 1];
     char *c = NULL;
 
     while (fgets(buffer, 1024, file) && c == NULL){
@@ -298,7 +302,8 @@ char* ExtractRepo(char* url){
     }
 
     if (c == NULL)
-        errx(EXIT_FAILURE, "ERROR Page of the repository not found");
+        errx(EXIT_FAILURE, "ERROR Root of the repository not found");
+
 
     c = strstr(c, "href");
     c += 6; //hreaf="
@@ -315,9 +320,33 @@ char* ExtractRepo(char* url){
 
     fclose(file);
 
+    char temp_str[SIZE_OF_STRING] = "";
+    char second_temp[SIZE_OF_STRING] = "";
+    c = url;
+    while (*c != 0){
+        int i = 0;
+        strcpy(second_temp, temp_str);
+        while (*c != 0 && *c != '/')
+            temp_str[i++] = *(c++);
+        temp_str[i] = 0;
+        c++;
+    }
+
+    char* new_url = malloc(SIZE_OF_STRING);
+    int ind = 0;
+    while (url[ind] != 0){
+        new_url[ind] = url[ind];
+        ind++;
+    }
+    new_url[ind++] = '/';
+    int i = 0;
+    while (second_temp[i] != 0)
+        new_url[ind++] = second_temp[i++];
+    new_url[ind] = 0;
+
 
     // Second page
-    if (PageDownload(url, "RepoPage.html"))
+    if (PageDownload(new_url, "RepoPage.html"))
         errx(EXIT_FAILURE, "ERROR impossible to download the repo page (check yout internet connection)");
 
     snprintf(file_path, sizeof(file_path), "%s/RepoPage.html", dotjarvis_path);
@@ -327,25 +356,28 @@ char* ExtractRepo(char* url){
     if (!file2)
         errx(EXIT_FAILURE, "ERROR Impossible to open the file %s", file_path);
 
-
     
-    c = NULL;
-    while (fgets(buffer, 1024, file2) && c == NULL){
-        c = strstr(buffer, "gitUrl");
+    
+    char* ch = NULL;
+    while (ch == NULL && fgets(buffer, 2048, file2)){
+        ch = strstr(buffer, "gitUrl");
     }
-    if (c == NULL)
+    if (ch == NULL)
         errx(EXIT_FAILURE, "ERROR Page of the repository not found");
 
-    c = strstr(buffer, "value");
-    c += 7; //value="
+
+    ch = strstr(buffer, "value");
+    ch += 7; //value="
 
     int ind_repo_url = 0;
     char* repo_url = malloc(SIZE_OF_STRING);
-    while (*c != '\"')
-        repo_url[ind_repo_url++] = *(c++);
+    while (*ch != '\"')
+        repo_url[ind_repo_url++] = *(ch++);
     repo_url[ind_repo_url] = 0;
 
 
+
     fclose(file2);
+
     return repo_url;
 }

@@ -1,5 +1,46 @@
 #include <get_documents.h>
 
+
+// download any page with it url -> .jarvis/subject.html
+int DowloadPage(char* url, char* file_name){
+    const char* subject_path = GetSubjectFolderPath();
+
+    char* jarvis_path;
+    GetDotJarvisPath(&jarvis_path);
+
+    char page_path[strlen(URL) + strlen(url) + 10];
+    snprintf(page_path, sizeof(page_path), "%s%s", URL, url);
+
+    char auth_path[512];
+    snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
+
+    // If not already Auth
+    if (access(auth_path, F_OK) != 0)
+        Auth();
+
+
+    char cmd_subject[1024];
+    snprintf(cmd_subject, sizeof(cmd_subject),
+        "%s/./setup_get_subject run \"%s\" %s %s %s", subject_path, page_path, subject_path, file_name, jarvis_path);
+
+    FILE *fp_page = popen(cmd_subject, "r");
+    if (fp_page == NULL) {
+        errx(EXIT_FAILURE, "ERROR Impossible to load the page %s.", page_path);
+    }
+
+
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fp_page) != NULL) {
+        printf("%s", buffer);
+    }
+
+    int status = pclose(fp_page);
+    if (!WIFEXITED(status))
+        errx(EXIT_FAILURE, "ERROR Impossible to download the document");
+
+    return EXIT_SUCCESS;
+}
+
 // log and save the subject
 int GetSubject(char* repo_name){
 
@@ -24,7 +65,15 @@ int GetSubject(char* repo_name){
     if (!fp_subject) {
         errx(EXIT_FAILURE, "ERROR Impossible to load the subject.");
     }
-    pclose(fp_subject);
+
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fp_subject) != NULL) {
+        printf("%s", buffer);
+    }
+
+    int status = pclose(fp_subject);
+    if (!WIFEXITED(status))
+        errx(EXIT_FAILURE, "ERROR Impossible to download the document");
 
     return EXIT_SUCCESS;
 }

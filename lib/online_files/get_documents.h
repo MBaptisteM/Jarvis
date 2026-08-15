@@ -13,6 +13,7 @@
 #define SUBJECT "EMBEDDED_subject.html"
 #define GIVEN_FILES "assets.tar.gz"
 
+int DowloadPage(char* url, char* file_name);
 int GetSubject(char* repo_name);
 int GetGivenFiles(char* repo_name);
 int Auth();

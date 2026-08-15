@@ -15,7 +15,7 @@ const char *GetCommandPath();
 const char *GetSubjectFolderPath();
 char *GetInfoPath();
 char *GetTPsPath();
+int GetDotJarvisPath(char** path);
 
 int __GetRootPath(char** path);
 int __GetLocalPath(char** path);
-int __GetDotJarvisPath(char** path);
