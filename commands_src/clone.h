@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <ctype.h>
 
 #include "given_files_handling.h"
 #include "subject_handling.h"
@@ -17,11 +18,12 @@
 #include "tree_structure.h"
 #include "get_documents.h"
 #include "TPs_handler.h"
+#include "current_handling.h"
 
 #define SEMESTER "S"
 #define BIMESTER "B"
 
-
+int __SameStr(char* s1, char* s2);
 int __IsEpitaRepo(char* repo_name);
 char** __GetRelavitvePath(char *repo_name, size_t *size);
 int __OneLayerFindOrCreate(char *path, char *name, int is_folder);

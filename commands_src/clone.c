@@ -11,6 +11,11 @@ int main(int argc, char* argv[]){
     if (argc < 2)
         errx(EXIT_FAILURE, "ERROR you must enter the git remote to clone your repository");
 
+    if (__SameStr(argv[1], "current")){
+        // Get the current repository
+        argv[1] = GetCurrentRepo();
+    }
+
 
     if (!__IsEpitaRepo(argv[1])){
         printf("\033[1;31mWARNING This string is not an epita repository.\033[0m\n");
@@ -321,6 +326,14 @@ int main(int argc, char* argv[]){
 void __PrintPages(const char *local_url_repo){
     printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL, local_url_repo);
     printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,  local_url_repo, SUBJECT);
+}
+
+int __SameStr(char* s1, char* s2){
+    while (*s1 && *s2 && (tolower((unsigned char)*s1) == tolower((unsigned char)*s2))) {
+        s1++;
+        s2++;
+    }
+    return !*s1 && !*s2 && tolower((unsigned char)*s1) - tolower((unsigned char)*s2) == 0;
 }
 
 
