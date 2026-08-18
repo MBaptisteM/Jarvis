@@ -53,7 +53,7 @@ char *GetInfoPath(){
 }
 
 
-// Get path of the main folder TPs | NULL if not found
+// Get path of the main folder TPs (root folder) | NULL if not found
 char *GetTPsPath(){
     char *TPs_path = NULL;
 

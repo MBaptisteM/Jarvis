@@ -23,7 +23,7 @@ int main(int argc, char* argv[]){
 
         size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
-        snprintf(command_clone, command_size, "git clone %s", argv[1]);
+        snprintf(command_clone, command_size, "git submodule add --force %s", argv[1]);
 
         if(system(command_clone))
             errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
@@ -185,7 +185,8 @@ int main(int argc, char* argv[]){
         // CLONE
         size_t command_size = size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
-        snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
+        // snprintf(command_clone, command_size, "git -C %s clone %s", main_folder_path, argv[1]);
+        snprintf(command_clone, command_size, "git -C %s submodule add --force %s", main_folder_path, argv[1]);
 
 
         // Check if the clone is empty
@@ -210,7 +211,7 @@ int main(int argc, char* argv[]){
           
     }
 
-
+    // Make a choice if the repo is already filled
     if (repo_exists_or_filled){
         printf("\033[1mWhat should be done ?\033[0m\n\n");
 
@@ -258,6 +259,7 @@ int main(int argc, char* argv[]){
         CreateSubjectElements(repo_path, pid_get_subjects);
     }
 
+    // Rename the child repository
     if (need_to_be_renamed)
         __RenameRepo(repo_path, argv[1]);
 
@@ -269,7 +271,7 @@ int main(int argc, char* argv[]){
 
     free(main_folder_path);
 
-
+    // Push the repos (parent & child (if necessary))
     pid_t pid_push_root = fork();
     if (pid_push_root == 0){
         char* repo_name;
@@ -302,14 +304,6 @@ int main(int argc, char* argv[]){
                     "mv %s ../", REPO_NAME);
             if (chdir(TPs_path) != 0 || system(command_move) != 0)
                 errx(EXIT_FAILURE, "ERROR Impossible to execute commands");
-
-                
-            //
-            // char command_move[strlen(REPO_NAME) + SIZE_OF_STRING];
-            // snprintf(command_move, sizeof(command_move),
-            //         "mv %s ../", REPO_NAME);
-
-            // supprimer le dossier actuel
         }
 
         if (result_push == -1)
@@ -454,14 +448,65 @@ int __RenameRepo(char *repo_path, char *repo_name){
     snprintf(full_name, sizeof(full_name), "%s-%s-%s", stubborn, name, modules);
 
 
-    char rename_command[strlen(repo_path) + sizeof(full_name) + 20];
-    snprintf(rename_command, sizeof(rename_command), "mv %s %s", repo_path, full_name);
+    // char rename_command[strlen(repo_path) + sizeof(full_name) + 20];
+    // snprintf(rename_command, sizeof(rename_command), "mv %s %s", repo_path, full_name);
+
+    
 
     if (chdir(repo_path) != 0 || chdir("..") != 0)
-        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
+        errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders");
+
+    char* path;
+    if ((path = getcwd(NULL, 0)) == NULL)
+        errx(EXIT_FAILURE, "ERROR Imossible to get the current repository");
+
+    // // Execute rename
+    // if (system(rename_command))
+    //     errx(EXIT_FAILURE, "ERROR Impossible to rename the repo folder");
+
+    /// ----- TODO REANEME NE FONCTIONNE PAS
+    char* root_folder;
+    if (ReadInfo("main_path", &root_folder))
+        errx(EXIT_FAILURE, "ERROR Impossible to find the root repo");
+
+    size_t root_len = strlen(root_folder);
+
+    // 1. Rendre repo_path relatif
+    char *rel_repo_path = repo_path;
+    if (strncmp(repo_path, root_folder, root_len) == 0) {
+        rel_repo_path += root_len;
+        if (*rel_repo_path == '/') rel_repo_path++;
+    }
+
+    // 2. Rendre path relatif
+    char *rel_path = path;
+    if (strncmp(path, root_folder, root_len) == 0) {
+        rel_path += root_len;
+        if (*rel_path == '/') rel_path++;
+    }
+
+    // 3. Construire le chemin de destination final complet (relatif)
+    char final_dest[512];
+    snprintf(final_dest, sizeof(final_dest), "%s/%s", rel_path, full_name);
+
+    // --- SOLUTION SANS COMMIT, AVEC NETTOYAGE COMPLET DES REFERENCES ---
+    char rename_command[2048];
+    snprintf(rename_command, sizeof(rename_command),
+        "cd \"%s\" && "
+        "mv \"%s\" \"%s\" && "
+        "git submodule absorbgitdirs \"%s\" && "
+        "git add \"%s\"",
+        root_folder,
+        rel_repo_path, final_dest,
+        final_dest,
+        final_dest);
+
+    printf("COMMAND : %s\n", rename_command);
 
     if (system(rename_command))
-        errx(EXIT_FAILURE, "ERROR Impossible to rename the repo folder.");
+        errx(EXIT_FAILURE, "ERROR Impossible to rename the git repo folder");
+
+    // ---- END TODO
 
 
     WriteInfo(repo_name, full_name);

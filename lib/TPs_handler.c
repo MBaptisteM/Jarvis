@@ -53,7 +53,7 @@ char* GetOrCreateRepoRoot(){
 
         if (system(cmd_exist) == 0){
             snprintf(cmd_exist, sizeof(cmd_exist),
-                "gh repo clone \"%s\"",
+                "gh repo clone \"%s\" -- --recurse-submodules",
                 REPO_NAME);
             if (system(cmd_exist))
                 errx(EXIT_FAILURE, "ERROR Impossible to clone the root repo");
@@ -157,14 +157,14 @@ void InstallGH(){
     __RunCommand("sudo apt install -y gh"); 
 }
 
-// Rename .git.backup to .git
-void RestoreGitFolders(){
-    if (system(
-    "find . -type d -name '.temp_renames_git' "
-    "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.git\"' _ {} \\;"
-    "> /dev/null 2>&1"
-    )){}
-}
+// // Rename .git.backup to .git
+// void RestoreGitFolders(){
+//     if (system(
+//     "find . -type d -name '.temp_renames_git' "
+//     "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.git\"' _ {} \\;"
+//     "> /dev/null 2>&1"
+//     )){}
+// }
 
 
 
@@ -186,22 +186,22 @@ int AddRepoRoot(){
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
 
-    // Rename .git
-    if (system(
-        "find . -type d -name '.git' ! -path './.git' "
-        "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.temp_renames_git\"' _ {} \\; "
-        "> /dev/null 2>&1"
-    )) {}
+    // // Rename .git
+    // if (system(
+    //     "find . -type d -name '.git' ! -path './.git' "
+    //     "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.temp_renames_git\"' _ {} \\; "
+    //     "> /dev/null 2>&1"
+    // )) {}
 
     // Add
     if (system("git add .")){
         printf("\033[31mWARNING Impossible to add elements in the root repo\033[0m\n");
-        RestoreGitFolders();
+        // RestoreGitFolders();
         return EXIT_FAILURE;
     }
 
-    // Restore
-    RestoreGitFolders();
+    // // Restore
+    // RestoreGitFolders();
 
     return EXIT_SUCCESS;
 }

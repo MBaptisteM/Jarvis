@@ -71,7 +71,7 @@ int ReadInfo(char* key, char **value){
 
 int __CreateInfoFile(){
     char *info_file_full_path = GetInfoPath();
-    printf("create : %s\n", info_file_full_path);
+    printf("Create : %s\n", info_file_full_path);
     FILE *info_file = fopen(info_file_full_path, "w");
     free(info_file_full_path);
 
