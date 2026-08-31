@@ -268,7 +268,10 @@ int main(int argc, char* argv[]){
         errx(EXIT_FAILURE, "ERROR Impossible to read Jarvis files");
     snprintf(repo_path, size_repo_path, "%s%s", main_folder_path, name_repo);
 
+    // Save this repository as the current one
+    WriteInfo("current", repo_path);
 
+    free(name_repo);
     free(main_folder_path);
 
     // Push the repos (parent & child (if necessary))
