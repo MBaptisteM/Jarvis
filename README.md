@@ -18,14 +18,12 @@
 
 * [Overview](#overview)
 * [Features](#features)
-
   * [Authentication](#authentication)
   * [Enhanced Clone](#enhanced-clone)
   * [Automatic Tree Structure Organization](#automatic-tree-structure-organization)
   * [GitHub Integration](#github-integration)
 * [Installation](#installation)
 * [Commands](#commands)
-
   * [Authentication Command](#authentication-command)
   * [Clone Command](#clone-command)
   * [Uninstall Command](#uninstall-command)
@@ -131,9 +129,22 @@ This repository allows you to have a Long-term archival and reuse your code when
 
 # Installation
 
-> Documentation coming soon.
+Install Jarvis directly from your terminal using the automated setup script.
 
+### Usage
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/MBaptisteM/Jarvis/main/setup.sh | bash
+```
+
+### What happens
+
+1. A temporary workspace is created on your system.
+2. The latest version of Jarvis is downloaded.
+3. The setup script configures and installs the tool.
+4. Temporary files are safely cleaned up.
+
+---
 
 # Commands
 
@@ -202,7 +213,6 @@ Are you sure you want to uninstall Jarvis? [y/N]
 ```
 
 ---
-
 
 # License
 
