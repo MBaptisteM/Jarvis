@@ -13,8 +13,12 @@
 #define COMMAND_CLONE "clone"
 #define COMMAND_AUTH "auth"
 #define COMMAND_UNINSTALL "uninstall"
+#define COMMAND_PULL "pull"
+#define COMMAND_FIND "find"
 
 void Help();
 void HelpClone();
 void HelpUninstall();
 void HelpAuth();
+void HelpPull();
+void HelpFind();

@@ -1,15 +1,18 @@
 #include "clone.h"
-
+#include "clone_root.h"
 
 // baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
 // https://intra.forge.epita.fr/epita-prepa-computer-science/prog-101-p-00-2029/root/prog-101-p-00-2029
 
 int main(int argc, char* argv[]){
     atexit(CleanupOnExit);
-    
-    // Check if there is a git remote
-    if (argc < 2)
-        errx(EXIT_FAILURE, "ERROR you must enter the git remote to clone your repository");
+
+    // Case no argument, or "all": clone the root EPITA-TPs repository itself
+    // (bootstrap), instead of a specific TP repository.
+    if (argc < 2 || strcasecmp(argv[1], "all") == 0){
+        __CloneParentRepo();
+        return EXIT_SUCCESS;
+    }
 
     if (__SameStr(argv[1], "current")){
         // Get the current repository
