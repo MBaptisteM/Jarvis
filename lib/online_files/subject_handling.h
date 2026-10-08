@@ -8,6 +8,6 @@
 
 #include "get_documents.h"
 
-int SubjectDownload(char* repo_name);
+int SubjectDownload(char *repo_name);
 int CreateSubjectElements(char *repo_path, pid_t pid);
-char* GetSubjectModules(char *subject_path);
+char *GetSubjectModules(char *subject_path);

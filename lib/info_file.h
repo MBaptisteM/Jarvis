@@ -2,8 +2,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "get_jarvis_paths.h"
 
@@ -11,7 +11,6 @@
 
 #define SIZE_OF_STRING 512
 
-
-int ReadInfo(char* key, char **value);
+int ReadInfo(char *key, char **value);
 int __CreateInfoFile();
-int WriteInfo(char* key, char* value);
+int WriteInfo(char *key, char *value);

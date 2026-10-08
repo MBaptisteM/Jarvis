@@ -1,9 +1,9 @@
 #pragma once
 
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <err.h>
 
 #include "info_file.h"
 #include "tree_structure.h"
@@ -14,7 +14,7 @@ const char *GetCommandPath();
 const char *GetSubjectFolderPath();
 char *GetInfoPath();
 char *GetTPsPath();
-int GetDotJarvisPath(char** path);
+int GetDotJarvisPath(char **path);
 
-int __GetRootPath(char** path);
-int __GetLocalPath(char** path);
+int __GetRootPath(char **path);
+int __GetLocalPath(char **path);

@@ -1,18 +1,22 @@
 #include "tree_structure.h"
 
-
-int IsEmpty(char* path){
+int IsEmpty(char *path)
+{
     DIR *dir;
     struct dirent *entry;
 
     dir = opendir(path);
 
-    if (dir == NULL) {
+    if (dir == NULL)
+    {
         errx(-1, "ERROR Impossible to open the folder %s", path);
     }
 
-    while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0 && strcmp(entry->d_name, ".git") != 0){
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0
+            && strcmp(entry->d_name, ".git") != 0)
+        {
             closedir(dir);
             return 0;
         }
@@ -22,23 +26,29 @@ int IsEmpty(char* path){
     return 1;
 }
 
-
-int CleanFolder(char *folder_path){
+int CleanFolder(char *folder_path)
+{
     DIR *dir;
     struct dirent *entry;
 
     dir = opendir(folder_path);
 
-    if (dir == NULL) {
+    if (dir == NULL)
+    {
         errx(-1, "ERROR Impossible to open the folder %s", folder_path);
     }
 
-    while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0 && strcmp(entry->d_name, ".git") != 0){
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0
+            && strcmp(entry->d_name, ".git") != 0)
+        {
             char to_remove_path[1024];
-            snprintf(to_remove_path, 1024, "rm -rf %s/%s", folder_path, entry->d_name);
+            snprintf(to_remove_path, 1024, "rm -rf %s/%s", folder_path,
+                     entry->d_name);
             if (system(to_remove_path))
-                errx (EXIT_FAILURE, "ERROR Impossible ro remove %s/%s", folder_path, entry->d_name);
+                errx(EXIT_FAILURE, "ERROR Impossible ro remove %s/%s",
+                     folder_path, entry->d_name);
         }
     }
 
@@ -49,24 +59,26 @@ int CleanFolder(char *folder_path){
     return EXIT_SUCCESS;
 }
 
-
 // Try to find the mark file, return the path if find, NULL else
-char *FindMarkedFileBFS(){
+char *FindMarkedFileBFS()
+{
     return FindFileBFS(MARKED_FILE_NAME);
 }
 
 // Try to find the file <file_to_find>, return the path if find, NULL else
-char *FindFileBFS(const char *file_to_find){
+char *FindFileBFS(const char *file_to_find)
+{
     const char *home = getenv("HOME");
 
     if (!home)
         return NULL;
 
-    Queue q ={0};
+    Queue q = { 0 };
 
     Enqueue(&q, home);
 
-    while (q.front){
+    while (q.front)
+    {
         char *current_dir = Dequeue(&q);
 
         if (!current_dir)
@@ -74,25 +86,29 @@ char *FindFileBFS(const char *file_to_find){
 
         DIR *dir = opendir(current_dir);
 
-        if (!dir){
+        if (!dir)
+        {
             free(current_dir);
             continue;
         }
 
         struct dirent *entry;
 
-        while ((entry = readdir(dir)) != NULL){
+        while ((entry = readdir(dir)) != NULL)
+        {
             // Ignore . and ..
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            if (strcmp(entry->d_name, ".") == 0
+                || strcmp(entry->d_name, "..") == 0)
                 continue;
 
             char full_path[MAX_PATH_SIZE];
 
-            snprintf(full_path, sizeof(full_path), "%s/%s",
-                    current_dir, entry->d_name);
+            snprintf(full_path, sizeof(full_path), "%s/%s", current_dir,
+                     entry->d_name);
 
             // File found
-            if (strcmp(entry->d_name, file_to_find) == 0){
+            if (strcmp(entry->d_name, file_to_find) == 0)
+            {
                 closedir(dir);
 
                 char *result = strdup(current_dir);
@@ -100,7 +116,8 @@ char *FindFileBFS(const char *file_to_find){
                 free(current_dir);
 
                 // Clean the queue
-                while (q.front){
+                while (q.front)
+                {
                     char *tmp = Dequeue(&q);
                     free(tmp);
                 }
@@ -109,7 +126,8 @@ char *FindFileBFS(const char *file_to_find){
             }
 
             // Add subfolders
-            if (IsDirectory(full_path)){
+            if (IsDirectory(full_path))
+            {
                 Enqueue(&q, full_path);
             }
         }
@@ -122,7 +140,8 @@ char *FindFileBFS(const char *file_to_find){
 }
 
 // Check if the given element is a directory
-int IsDirectory(const char *path){
+int IsDirectory(const char *path)
+{
     struct stat st;
 
     if (stat(path, &st) != 0)
@@ -132,10 +151,11 @@ int IsDirectory(const char *path){
 }
 
 // Queue Definition for bfs
-void Enqueue(Queue *q, const char *path){
+void Enqueue(Queue *q, const char *path)
+{
     QueueNode *node = malloc(sizeof(QueueNode));
     if (!node)
-        return;
+        err(EXIT_FAILURE, "malloc");
 
     strncpy(node->path, path, MAX_PATH_SIZE - 1);
     node->path[MAX_PATH_SIZE - 1] = '\0';
@@ -149,17 +169,20 @@ void Enqueue(Queue *q, const char *path){
     q->rear = node;
 }
 
-char *Dequeue(Queue *q){
+char *Dequeue(Queue *q)
+{
     if (!q->front)
         return NULL;
 
     QueueNode *tmp = q->front;
 
     char *path = strdup(tmp->path);
+    if (path == NULL)
+        err(EXIT_FAILURE, "strdup");
 
     q->front = tmp->next;
 
-    if (!q->front)
+    if (q->rear == tmp)
         q->rear = NULL;
 
     free(tmp);

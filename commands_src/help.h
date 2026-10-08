@@ -1,13 +1,13 @@
 #pragma once
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <err.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <strings.h>
 
-#define RESET   "\033[0m"
-#define RED     "\033[31m"
-#define BOLD    "\033[1m"
+#define RESET "\033[0m"
+#define RED "\033[31m"
+#define BOLD "\033[1m"
 
 #define COMMAND_HELP "help"
 #define COMMAND_CLONE "clone"

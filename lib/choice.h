@@ -1,10 +1,10 @@
 #pragma once
 
+#include <err.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <err.h>
 
 void __EnableRawMode(struct termios *orig);
 void __DisableRawMode(struct termios *orig);
