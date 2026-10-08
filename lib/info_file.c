@@ -91,18 +91,29 @@ int WriteInfo(char* key, char* value){
     FILE *info_file = fopen(info_file_full_path, "r");
     
 
-    if (info_file == NULL)
+    if (info_file == NULL) {
+        free(info_file_full_path);
         return EXIT_FAILURE;
+    }
 
 
     char new_file_full_path[512];
-    char *home = getenv("HOME");
-    snprintf(new_file_full_path, sizeof(new_file_full_path), 
-            "%s%s/%s", home, NAME_JARVIS_FOLDER, "temp");
+    char *jarvis_path = NULL;
+    if (GetDotJarvisPath(&jarvis_path) != EXIT_SUCCESS) {
+        fclose(info_file);
+        free(info_file_full_path);
+        return EXIT_FAILURE;
+    }
+    snprintf(new_file_full_path, sizeof(new_file_full_path),
+            "%s/%s", jarvis_path, "temp");
+    free(jarvis_path);
     FILE *new_file = fopen(new_file_full_path, "w");
 
-    if (new_file == NULL)
+    if (new_file == NULL) {
+        fclose(info_file);
+        free(info_file_full_path);
         return EXIT_FAILURE;
+    }
 
     
     size_t len_key = strlen(key);

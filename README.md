@@ -131,7 +131,29 @@ This repository allows you to have a Long-term archival and reuse your code when
 
 # Installation
 
-> Documentation coming soon.
+Jarvis is installed in the current user's home directory and does not require
+`sudo` or a system package manager. If a build tool is missing, the installer
+uses Nix profiles (`nix profile add`) to install it.
+
+To bootstrap the installer when Git is not already available:
+
+```bash
+nix profile add nixpkgs#git nixpkgs#gnumake nixpkgs#gcc
+git clone https://github.com/MBaptisteM/Jarvis.git
+cd Jarvis
+./install
+```
+
+The installer places the executable in `~/.local/bin`, commands in
+`~/.local/lib/jarvis`, and Bash completion in
+`~/.local/share/bash-completion/completions`. Add `~/.local/bin` to your
+`PATH` if it is not already there.
+
+Jarvis stores its data in `~/.config/.jarvis` when `~/.config` exists;
+otherwise it keeps using `~/.jarvis`. The optional GitHub integration installs
+GitHub CLI with `nix profile add nixpkgs#gh` if needed. Subject browser setup
+needs Node.js (installed with `nix profile add nixpkgs#nodejs` if missing) and
+downloads Chromium through Playwright.
 
 
 

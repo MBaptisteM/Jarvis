@@ -14,9 +14,22 @@ fi
 
 PLAYWRIGHT_MARKER="$SUBJECT_PATH/.playwright_setup_done"
 
-NEED_SUDO=0
 NEED_PLAYWRIGHT_NPM=0
 NEED_SETUP=0
+
+if ! command -v npm >/dev/null 2>&1; then
+    if ! command -v nix >/dev/null 2>&1; then
+        echo "npm is required. Install Node.js with: nix profile add nixpkgs#nodejs" >&2
+        exit 1
+    fi
+    nix profile add nixpkgs#nodejs
+    export PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin:$PATH"
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is still unavailable after installing Node.js with Nix." >&2
+    exit 1
+fi
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
     npm init -y --prefix "$SUBJECT_PATH" > /dev/null
@@ -28,12 +41,6 @@ fi
 
 if [ ! -f "$PLAYWRIGHT_MARKER" ]; then
     NEED_SETUP=1
-    NEED_SUDO=1
-fi
-
-if [ "$NEED_SUDO" -eq 1 ]; then
-    echo "Administrator privileges required."
-    sudo -v
 fi
 
 if [ "$NEED_PLAYWRIGHT_NPM" -eq 1 ]; then
@@ -41,7 +48,6 @@ if [ "$NEED_PLAYWRIGHT_NPM" -eq 1 ]; then
 fi
 
 if [ "$NEED_SETUP" -eq 1 ]; then
-    (cd "$SUBJECT_PATH" && sudo env PATH="$PATH" npx playwright install-deps chromium)
     (cd "$SUBJECT_PATH" && npx playwright install chromium)
     touch "$PLAYWRIGHT_MARKER"
 fi

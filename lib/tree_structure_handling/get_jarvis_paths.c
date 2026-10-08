@@ -41,13 +41,14 @@ const char *GetSubjectFolderPath(){
 // Get path of the info file
 char *GetInfoPath(){
 
-    char *home_path;
+    char *home_path = NULL;
     if (GetDotJarvisPath(&home_path))
         errx(EXIT_FAILURE, "ERROR Impoossible to find home path.");
 
     char* info_file_full_path = malloc(512);
     snprintf(info_file_full_path, 512, 
             "%s/%s", home_path, INFORMATION_FILE_NAME);
+    free(home_path);
     
     return info_file_full_path;
 }
@@ -72,7 +73,7 @@ char *GetTPsPath(){
 
 
 
-// Get the path to /usr/local/lib/jarvis
+// Get the path to the system-wide Jarvis installation
 int __GetRootPath(char** path){
     if (access("/usr/local/lib/jarvis", F_OK) == 0) {
         *path = malloc(512);
@@ -86,7 +87,7 @@ int __GetRootPath(char** path){
     return EXIT_FAILURE;
 }
 
-// Get the path to ~/.local/lib/jarvis
+// Get the path to the user-local Jarvis installation
 int __GetLocalPath(char** path){
     char *home = getenv("HOME");
     if (home) {
@@ -104,7 +105,7 @@ int __GetLocalPath(char** path){
     return EXIT_FAILURE;
 }
 
-// Get the path to ~/.jarvis
+// Prefer the XDG config directory when it already exists.
 int GetDotJarvisPath(char** path){
     char *home = getenv("HOME");
     if (home) {
@@ -113,11 +114,16 @@ int GetDotJarvisPath(char** path){
         if (!*path) 
             return EXIT_FAILURE;
 
-        snprintf(*path, 512, "%s%s", home, NAME_JARVIS_FOLDER);
+        char config_path[512];
+        struct stat config_stat;
+        snprintf(config_path, sizeof(config_path), "%s/.config", home);
+        if (stat(config_path, &config_stat) == 0 && S_ISDIR(config_stat.st_mode))
+            snprintf(*path, 512, "%s/.config/.jarvis", home);
+        else
+            snprintf(*path, 512, "%s/.jarvis", home);
         
         return EXIT_SUCCESS;
     }
 
     return EXIT_FAILURE;
 }
-

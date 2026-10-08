@@ -8,7 +8,6 @@
 #include "info_file.h"
 #include "tree_structure.h"
 
-#define NAME_JARVIS_FOLDER "/.jarvis"
 #define INFORMATION_FILE_NAME "info_file"
 
 const char *GetCommandPath();

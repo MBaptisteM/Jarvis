@@ -1,4 +1,4 @@
-CC = gcc
+CC ?= cc
 INC_DIRS := $(shell find lib -type d) 
 CFLAGS = -Wall -Wextra -O2 $(addprefix -I,$(INC_DIRS))  # -g -fsanitize=address
 LDLIBS = -lm

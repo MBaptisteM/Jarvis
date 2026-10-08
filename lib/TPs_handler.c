@@ -134,27 +134,42 @@ char* GetOrCreateRepoRoot(){
     return path;
 }
 
+static void AddNixProfileToPath(){
+    const char *home = getenv("HOME");
+    if (home == NULL)
+        return;
+
+    const char *path = getenv("PATH");
+    if (path == NULL)
+        path = "";
+
+    size_t profile_path_size = 2 * strlen(home) + strlen(path)
+            + sizeof("/.nix-profile/bin:/.local/state/nix/profiles/profile/bin:");
+    char *profile_path = malloc(profile_path_size);
+    if (profile_path == NULL)
+        err(EXIT_FAILURE, "Unable to allocate PATH for Nix profile");
+
+    snprintf(profile_path, profile_path_size,
+            "%s/.nix-profile/bin:%s/.local/state/nix/profiles/profile/bin:%s",
+            home, home, path);
+    int set_path_result = setenv("PATH", profile_path, 1);
+    free(profile_path);
+    if (set_path_result != 0)
+        err(EXIT_FAILURE, "Unable to update PATH for Nix profile");
+}
+
 void InstallGH(){
+    AddNixProfileToPath();
     // Check if gh exists
     if (system("command -v gh > /dev/null 2>&1") == 0)
         return;
 
-    // Install gh
-    __RunCommand("sudo apt update");
-    __RunCommand("sudo apt install -y curl");
+    if (system("command -v nix > /dev/null 2>&1") != 0)
+        errx(EXIT_FAILURE, "GitHub CLI is required; install it with: nix profile add nixpkgs#gh");
 
-    __RunCommand("curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg "
-            "| sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg");
-
-    __RunCommand("sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg");
-
-    __RunCommand("echo \"deb [arch=$(dpkg --print-architecture) "
-            "signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] "
-            "https://cli.github.com/packages stable main\" "
-            "| sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null");
-
-    __RunCommand("sudo apt update");
-    __RunCommand("sudo apt install -y gh"); 
+    __RunCommand("nix profile add nixpkgs#gh");
+    if (system("command -v gh > /dev/null 2>&1") != 0)
+        errx(EXIT_FAILURE, "GitHub CLI was installed with Nix but is not available in PATH");
 }
 
 // // Rename .git.backup to .git
