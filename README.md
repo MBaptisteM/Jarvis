@@ -18,14 +18,12 @@
 
 * [Overview](#overview)
 * [Features](#features)
-
   * [Authentication](#authentication)
   * [Enhanced Clone](#enhanced-clone)
   * [Automatic Tree Structure Organization](#automatic-tree-structure-organization)
   * [GitHub Integration](#github-integration)
 * [Installation](#installation)
 * [Commands](#commands)
-
   * [Authentication Command](#authentication-command)
   * [Clone Command](#clone-command)
   * [Uninstall Command](#uninstall-command)
@@ -131,31 +129,22 @@ This repository allows you to have a Long-term archival and reuse your code when
 
 # Installation
 
-Jarvis is installed in the current user's home directory and does not require
-`sudo` or a system package manager. If a build tool is missing, the installer
-uses Nix profiles (`nix profile add`) to install it.
+Install Jarvis directly from your terminal using the automated setup script.
 
-To bootstrap the installer when Git is not already available:
+### Usage
 
 ```bash
-nix profile add nixpkgs#git nixpkgs#gnumake nixpkgs#gcc
-git clone https://github.com/MBaptisteM/Jarvis.git
-cd Jarvis
-./install
+curl -fsSL https://raw.githubusercontent.com/MBaptisteM/Jarvis/main/setup.sh | bash
 ```
 
-The installer places the executable in `~/.local/bin`, commands in
-`~/.local/lib/jarvis`, and Bash completion in
-`~/.local/share/bash-completion/completions`. Add `~/.local/bin` to your
-`PATH` if it is not already there.
+### What happens
 
-Jarvis stores its data in `~/.config/.jarvis` when `~/.config` exists;
-otherwise it keeps using `~/.jarvis`. The optional GitHub integration installs
-GitHub CLI with `nix profile add nixpkgs#gh` if needed. Subject browser setup
-needs Node.js (installed with `nix profile add nixpkgs#nodejs` if missing) and
-downloads Chromium through Playwright.
+1. A temporary workspace is created on your system.
+2. The latest version of Jarvis is downloaded.
+3. The setup script configures and installs the tool.
+4. Temporary files are safely cleaned up.
 
-
+---
 
 # Commands
 
@@ -224,7 +213,6 @@ Are you sure you want to uninstall Jarvis? [y/N]
 ```
 
 ---
-
 
 # License
 
