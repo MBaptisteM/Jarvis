@@ -13,6 +13,8 @@ if [ -z "$MODE" ] || [ -z "$URL" ] || [ -z "$SUBJECT_PATH" ]; then
 fi
 
 PLAYWRIGHT_MARKER="$SUBJECT_PATH/.playwright_setup_done"
+NIX_PROFILE_PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin"
+export PATH="$NIX_PROFILE_PATH:$PATH"
 
 NEED_PLAYWRIGHT_NPM=0
 NEED_SETUP=0
@@ -23,7 +25,7 @@ if ! command -v npm >/dev/null 2>&1; then
         exit 1
     fi
     nix profile add nixpkgs#nodejs
-    export PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin:$PATH"
+    export PATH="$NIX_PROFILE_PATH:$PATH"
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
@@ -47,7 +49,25 @@ if [ "$NEED_PLAYWRIGHT_NPM" -eq 1 ]; then
     npm install playwright --prefix "$SUBJECT_PATH"
 fi
 
-if [ "$NEED_SETUP" -eq 1 ]; then
+if [ -e /etc/NIXOS ] || grep -qi '^ID=nixos$' /etc/os-release 2>/dev/null; then
+    if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
+        if ! command -v nix >/dev/null 2>&1; then
+            echo "Chromium is required on NixOS. Install it with: nix profile add nixpkgs#chromium" >&2
+            exit 1
+        fi
+        nix profile add nixpkgs#chromium
+        export PATH="$NIX_PROFILE_PATH:$PATH"
+    fi
+
+    if command -v chromium >/dev/null 2>&1; then
+        export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium)"
+    elif command -v chromium-browser >/dev/null 2>&1; then
+        export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium-browser)"
+    else
+        echo "Chromium was installed with Nix but is not available in PATH." >&2
+        exit 1
+    fi
+elif [ "$NEED_SETUP" -eq 1 ]; then
     (cd "$SUBJECT_PATH" && npx playwright install chromium)
     touch "$PLAYWRIGHT_MARKER"
 fi

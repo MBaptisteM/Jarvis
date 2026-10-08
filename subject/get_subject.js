@@ -1,6 +1,14 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 
+function launchBrowser(options) {
+  const executablePath = process.env.JARVIS_CHROMIUM_EXECUTABLE_PATH;
+  return chromium.launch({
+    ...options,
+    ...(executablePath ? { executablePath } : {})
+  });
+}
+
 (async () => {
   const mode = process.argv[2];
   const url = process.argv[3];
@@ -29,7 +37,7 @@ const fs = require('fs');
     console.log("\n➡️  \x1b[1mPlease \x1b[32mconnect to your forge account.\x1b[0m");
     console.log("➡️  \x1b[1mThen close the window.\x1b[0m");
 
-    const browser = await chromium.launch({ headless: false });
+    const browser = await launchBrowser({ headless: false });
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -51,7 +59,7 @@ const fs = require('fs');
       process.exit(1);
     }
 
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
     const context = await browser.newContext({
       storageState: auth_path
     });
@@ -75,7 +83,7 @@ const fs = require('fs');
       process.exit(1);
     }
 
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
     const context = await browser.newContext({
       storageState: auth_path
     });
@@ -122,4 +130,7 @@ const fs = require('fs');
     process.exit(1);
   }
 
-})();
+})().catch((error) => {
+  console.error("ERROR Browser automation failed:", error.message);
+  process.exit(1);
+});

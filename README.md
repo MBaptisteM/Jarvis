@@ -144,6 +144,11 @@ curl -fsSL https://raw.githubusercontent.com/MBaptisteM/Jarvis/main/setup.sh | b
 3. The setup script configures and installs the tool.
 4. Temporary files are safely cleaned up.
 
+For browser authentication, Jarvis uses the system Chromium package installed
+with `nix profile add nixpkgs#chromium` on NixOS, because the generic Chromium
+downloaded by Playwright is not directly executable there. On other Unix
+systems, Jarvis continues to install Chromium through Playwright.
+
 ---
 
 # Commands
