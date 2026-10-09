@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "TPs_handler.h"
@@ -11,6 +12,31 @@
 #include "info_file.h"
 
 #define SIZE_OF_STRING 512
+
+static int __IsGitRepositoryPath(const char *path)
+{
+    size_t git_path_size = strlen(path) + sizeof("/.git");
+    char *git_path = malloc(git_path_size);
+    if (git_path == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    snprintf(git_path, git_path_size, "%s/.git", path);
+    struct stat info;
+    int is_git_repository = stat(git_path, &info) == 0;
+    free(git_path);
+    return is_git_repository;
+}
+
+static char *__JoinRepoPath(const char *parent, const char *repo_name)
+{
+    size_t path_size = strlen(parent) + strlen(repo_name) + 2;
+    char *path = malloc(path_size);
+    if (path == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    snprintf(path, path_size, "%s/%s", parent, repo_name);
+    return path;
+}
 
 // Try to detect the currently connected GitHub account by parsing the
 // greeting ssh sends back when authenticating over the git protocol.
@@ -92,7 +118,7 @@ void __CloneParentRepo(void)
     char *root_folder;
     if (ReadInfo("main_path", &root_folder) == 0)
     {
-        if (access(root_folder, F_OK) == 0)
+        if (__IsGitRepositoryPath(root_folder))
         {
             printf("\033[1;32mThe root repository is already cloned at "
                    ":\033[0m\n\033[1m%s\033[0m\n\n",
@@ -111,15 +137,22 @@ void __CloneParentRepo(void)
     char *found_path = FindFileBFS(REPO_NAME);
     if (found_path != NULL)
     {
-        printf("\033[1;32mFound an existing root repository at "
-               ":\033[0m\n\033[1m%s\033[0m\n\n",
-               found_path);
-
-        WriteInfo("main_path", found_path);
-        WriteInfo("current", found_path);
-
+        char *repo_path = __JoinRepoPath(found_path, REPO_NAME);
         free(found_path);
-        return;
+
+        if (__IsGitRepositoryPath(repo_path))
+        {
+            printf("\033[1;32mFound an existing root repository at "
+                   ":\033[0m\n\033[1m%s\033[0m\n\n",
+                   repo_path);
+
+            WriteInfo("main_path", repo_path);
+            WriteInfo("current", repo_path);
+            free(repo_path);
+            return;
+        }
+
+        free(repo_path);
     }
 
     // Really not found anywhere : clone it, assuming it lives under

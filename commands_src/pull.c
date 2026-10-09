@@ -22,6 +22,44 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
+static int __IsGitRepositoryPath(const char *path)
+{
+    size_t git_path_size = strlen(path) + sizeof("/.git");
+    char *git_path = malloc(git_path_size);
+    if (git_path == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    snprintf(git_path, git_path_size, "%s/.git", path);
+    int is_git_repository = access(git_path, F_OK) == 0;
+    free(git_path);
+    return is_git_repository;
+}
+
+static char *__FindRootRepository(char *recorded_path)
+{
+    if (__IsGitRepositoryPath(recorded_path))
+        return recorded_path;
+
+    size_t repo_path_size = strlen(recorded_path) + sizeof("/EPITA-TPs");
+    char *repo_path = malloc(repo_path_size);
+    if (repo_path == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    snprintf(repo_path, repo_path_size, "%s/EPITA-TPs", recorded_path);
+    if (__IsGitRepositoryPath(repo_path))
+    {
+        fprintf(stderr,
+                "WARNING: correcting the saved root repository path to %s\n",
+                repo_path);
+        WriteInfo("main_path", repo_path);
+        free(recorded_path);
+        return repo_path;
+    }
+
+    free(repo_path);
+    return recorded_path;
+}
+
 // Pull the root repository and all its submodules
 void __PullMain(void)
 {
@@ -30,6 +68,13 @@ void __PullMain(void)
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
+
+    root_folder = __FindRootRepository(root_folder);
+    if (!__IsGitRepositoryPath(root_folder))
+        errx(EXIT_FAILURE,
+             "ERROR The saved root path %s is not a Git repository. "
+             "Run 'jarvis auth' or 'jarvis clone all' to locate it again.",
+             root_folder);
 
     printf("\033[1mPulling all repositories starting from "
            ":\033[0m\n\033[1m%s\033[0m\n\n",
@@ -49,6 +94,40 @@ void __PullCurrent(void)
              "ERROR Trying to pull the current repository but no current "
              "repository found");
 
+    char *recorded_current = strdup(path);
+    if (recorded_current == NULL)
+        err(EXIT_FAILURE, "strdup");
+
+    char *root_folder = NULL;
+    int current_was_root = 0;
+    if (ReadInfo("main_path", &root_folder) == 0)
+    {
+        current_was_root = strcmp(path, root_folder) == 0;
+        root_folder = __FindRootRepository(root_folder);
+        if (!current_was_root && __IsGitRepositoryPath(root_folder))
+        {
+            size_t nested_root_size = strlen(path) + sizeof("/EPITA-TPs");
+            char *nested_root = malloc(nested_root_size);
+            if (nested_root == NULL)
+                err(EXIT_FAILURE, "malloc");
+            snprintf(nested_root, nested_root_size, "%s/EPITA-TPs", path);
+            current_was_root = strcmp(nested_root, root_folder) == 0;
+            free(nested_root);
+        }
+    }
+
+    if (!__IsGitRepositoryPath(path) && current_was_root
+        && root_folder != NULL && __IsGitRepositoryPath(root_folder))
+    {
+        free(path);
+        path = strdup(root_folder);
+        if (path == NULL)
+            err(EXIT_FAILURE, "strdup");
+        WriteInfo("current", path);
+    }
+    free(recorded_current);
+    free(root_folder);
+
     // Get the repo name from the path
     char repo_name[SIZE_OF_STRING];
     int i = 0;
@@ -67,7 +146,20 @@ void __PullCurrent(void)
     if (access(path, F_OK) != 0)
     {
         free(path);
-        path = FindFileBFS(repo_name);
+        path = NULL;
+        char *parent_path = FindFileBFS(repo_name);
+        if (parent_path != NULL)
+        {
+            size_t path_size = strlen(parent_path) + strlen(repo_name) + 2;
+            path = malloc(path_size);
+            if (path == NULL)
+            {
+                free(parent_path);
+                err(EXIT_FAILURE, "malloc");
+            }
+            snprintf(path, path_size, "%s/%s", parent_path, repo_name);
+            free(parent_path);
+        }
 
         // Fallback: if the stored value was actually the raw git remote
         // (e.g. left over from a failed rename in clone.c), the folder on
@@ -79,7 +171,20 @@ void __PullCurrent(void)
             if (len > 4 && strcmp(repo_name + len - 4, ".git") == 0)
             {
                 repo_name[len - 4] = 0;
-                path = FindFileBFS(repo_name);
+                char *parent_path = FindFileBFS(repo_name);
+                if (parent_path != NULL)
+                {
+                    size_t path_size =
+                        strlen(parent_path) + strlen(repo_name) + 2;
+                    path = malloc(path_size);
+                    if (path == NULL)
+                    {
+                        free(parent_path);
+                        err(EXIT_FAILURE, "malloc");
+                    }
+                    snprintf(path, path_size, "%s/%s", parent_path, repo_name);
+                    free(parent_path);
+                }
             }
         }
 
@@ -88,6 +193,11 @@ void __PullCurrent(void)
                  "ERROR Impossible to find the current repository %s locally "
                  "(try to re-clone it)",
                  repo_name);
+    }
+    else if (!__IsGitRepositoryPath(path))
+    {
+        errx(EXIT_FAILURE,
+             "ERROR The current path %s is not a Git repository.", path);
     }
 
     __PullRepo(path);

@@ -158,7 +158,6 @@ void HelpPull()
     printf("│  jarvis %s all\n", COMMAND_PULL);
     printf("│  jarvis %s current\n", COMMAND_PULL);
     printf("│  jarvis %s my_project\n", COMMAND_PULL);
-    printf("│  jarvis %s src/utils\n", COMMAND_PULL);
     printf("│\n└─\n");
 }
 
@@ -185,6 +184,6 @@ void HelpFind()
     printf("│  jarvis %s current\n", COMMAND_FIND);
     printf("│  jarvis %s firstname.name@git.forge.epita.fr:p/...\n",
            COMMAND_FIND);
-    printf("│  jarvis %s \"binary trees\"\n", COMMAND_FIND);
+    printf("│  jarvis %s \"trees\"\n", COMMAND_FIND);
     printf("│\n└─\n");
 }

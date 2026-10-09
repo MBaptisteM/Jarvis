@@ -1,6 +1,44 @@
 #include "info_file.h"
 
+#include <ctype.h>
+#include <unistd.h>
+
 // REWRITE TO BECOME READINFO
+
+static const char *__InfoValueForKey(const char *line, const char *key)
+{
+    while (*line == '\0' || isspace((unsigned char)*line))
+        line++;
+    if (*line++ != '"')
+        return NULL;
+
+    size_t key_length = strlen(key);
+    if (strncmp(line, key, key_length) != 0 || line[key_length] != '"')
+        return NULL;
+    line += key_length + 1;
+
+    while (isspace((unsigned char)*line))
+        line++;
+    if (*line++ != ':')
+        return NULL;
+    while (isspace((unsigned char)*line))
+        line++;
+    if (*line++ != '"')
+        return NULL;
+
+    return line;
+}
+
+static void __RemoveNullBytes(char *line, ssize_t line_length)
+{
+    ssize_t output_index = 0;
+    for (ssize_t input_index = 0; input_index < line_length; input_index++)
+    {
+        if (line[input_index] != '\0')
+            line[output_index++] = line[input_index];
+    }
+    line[output_index] = '\0';
+}
 
 // Return the value associated to the key in entry
 int ReadInfo(char *key, char **value)
@@ -20,63 +58,35 @@ int ReadInfo(char *key, char **value)
         return EXIT_FAILURE;
     }
 
-    size_t len_key = strlen(key);
-    char actual_char;
-
-    while ((actual_char = fgetc(info_file)) != EOF)
+    char *line = NULL;
+    size_t line_capacity = 0;
+    ssize_t line_length;
+    while ((line_length = getline(&line, &line_capacity, info_file)) >= 0)
     {
-        size_t index_key = 0;
+        __RemoveNullBytes(line, line_length);
+        const char *value_start = __InfoValueForKey(line, key);
+        if (value_start == NULL)
+            continue;
 
-        while (actual_char != EOF)
+        const char *value_end = strchr(value_start, '"');
+        if (value_end == NULL)
+            continue;
+
+        size_t value_length = (size_t)(value_end - value_start);
+        *value = malloc(value_length + 1);
+        if (*value == NULL)
         {
-            if (actual_char == '"')
-                break;
-            actual_char = fgetc(info_file);
-        }
-
-        while (index_key < len_key && fgetc(info_file) == key[index_key])
-        {
-            index_key++;
-        }
-
-        if (index_key == len_key && fgetc(info_file) == '"')
-        {
-            // We are on the line that contains the key we were looking for
-
-            while ((actual_char = fgetc(info_file)) != EOF)
-            {
-                if (actual_char == '"')
-                    break;
-            }
-
-            *value = malloc(SIZE_OF_STRING);
-            if (*value == NULL)
-            {
-                fclose(info_file);
-                err(EXIT_FAILURE, "malloc");
-            }
-            size_t i = 0;
-            while (((*value)[i++] = fgetc(info_file)) != EOF)
-            {
-                if ((*value)[i - 1] == '"')
-                    break;
-            }
-
-            (*value)[i - 1] = 0;
-
+            free(line);
             fclose(info_file);
-
-            return EXIT_SUCCESS;
+            err(EXIT_FAILURE, "malloc");
         }
-
-        while ((actual_char = fgetc(info_file)) != EOF)
-        {
-            if (actual_char == ',')
-            {
-                break;
-            }
-        }
+        memcpy(*value, value_start, value_length);
+        (*value)[value_length] = '\0';
+        free(line);
+        fclose(info_file);
+        return EXIT_SUCCESS;
     }
+    free(line);
     fclose(info_file);
 
     return EXIT_FAILURE;
@@ -99,7 +109,6 @@ int __CreateInfoFile()
 
 int WriteInfo(char *key, char *value)
 {
-    // Put main_folder_path at the begining of file
     char *info_file_full_path = GetInfoPath();
     FILE *info_file = fopen(info_file_full_path, "r");
 
@@ -109,94 +118,64 @@ int WriteInfo(char *key, char *value)
         return EXIT_FAILURE;
     }
 
-    char new_file_full_path[512];
-    char *jarvis_path = NULL;
-    if (GetDotJarvisPath(&jarvis_path) != EXIT_SUCCESS)
+    size_t temporary_path_size = strlen(info_file_full_path) + sizeof(".tmp");
+    char *temporary_path = malloc(temporary_path_size);
+    if (temporary_path == NULL)
     {
         fclose(info_file);
         free(info_file_full_path);
         return EXIT_FAILURE;
     }
-    snprintf(new_file_full_path, sizeof(new_file_full_path), "%s/%s",
-             jarvis_path, "temp");
-    free(jarvis_path);
-    FILE *new_file = fopen(new_file_full_path, "w");
+    snprintf(temporary_path, temporary_path_size, "%s.tmp", info_file_full_path);
+    FILE *new_file = fopen(temporary_path, "w");
 
     if (new_file == NULL)
     {
         fclose(info_file);
+        free(temporary_path);
         free(info_file_full_path);
         return EXIT_FAILURE;
     }
 
-    size_t len_key = strlen(key);
-
-    char buffer[SIZE_OF_STRING];
-    size_t index_buffer = 0;
-
+    char *line = NULL;
+    size_t line_capacity = 0;
+    ssize_t line_length;
     int data_modified = 0;
+    int write_failed = 0;
 
-    while ((buffer[index_buffer++] = fgetc(info_file)) != EOF)
+    while ((line_length = getline(&line, &line_capacity, info_file)) >= 0)
     {
-        size_t index_key = 0;
-        while (buffer[index_buffer - 1] != EOF)
+        __RemoveNullBytes(line, line_length);
+        if (!data_modified && __InfoValueForKey(line, key) != NULL)
         {
-            if (buffer[index_buffer - 1] == '"')
-                break;
-            buffer[index_buffer++] = fgetc(info_file);
-        }
-
-        while (index_key < len_key
-               && (buffer[index_buffer++] = fgetc(info_file)) == key[index_key])
-        {
-            index_key++;
-        }
-        if (index_key == len_key
-            && (buffer[index_buffer++] = fgetc(info_file)) == '"')
-        {
-            // We are on the line that contains the key we were looking for
-            fprintf(new_file, "\"%s\" : \"%s\",\n", key, value);
-
+            if (fprintf(new_file, "\"%s\" : \"%s\",\n", key, value) < 0)
+                write_failed = 1;
             data_modified = 1;
-
-            // Pass the current line
-            while ((buffer[index_buffer++] = fgetc(info_file)) != EOF)
-            {
-                if (buffer[index_buffer - 1] == ',')
-                    break;
-            }
-
-            // Write all the folder
-            while ((fgets(buffer, sizeof(buffer), info_file)) != NULL)
-                fputs(buffer, new_file);
-
-            break;
         }
-
-        // Write the line in the new file
-        while ((buffer[index_buffer++] = fgetc(info_file)) != EOF)
+        else if (fputs(line, new_file) == EOF)
         {
-            if (buffer[index_buffer - 1] == ',')
-            {
-                buffer[index_buffer + 1] = 0;
-                fputs(buffer, new_file);
-                break;
-            }
+            write_failed = 1;
         }
-
-        index_buffer = 0;
     }
 
-    if (!data_modified)
-        fprintf(new_file, "\"%s\" : \"%s\",\n", key, value);
+    if (ferror(info_file))
+        write_failed = 1;
+    if (!data_modified
+        && fprintf(new_file, "\"%s\" : \"%s\",\n", key, value) < 0)
+        write_failed = 1;
 
+    free(line);
     fclose(info_file);
-    fclose(new_file);
 
-    remove(info_file_full_path);
-    rename(new_file_full_path, info_file_full_path);
+    if (fclose(new_file) != 0)
+        write_failed = 1;
+    if (!write_failed && rename(temporary_path, info_file_full_path) != 0)
+        write_failed = 1;
+    if (write_failed)
+        remove(temporary_path);
 
+    free(temporary_path);
     free(info_file_full_path);
 
-    return EXIT_SUCCESS;
+    return write_failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }
