@@ -7,11 +7,6 @@
 #define OTHERS_FOLDER_NAME "Others"
 
 // Strictly parse the course id of an EPITA repository url.
-// The url must contain a path component shaped like
-// <letters>-<3 digits>-<letter>-<2 digits>-<4 digits> (ex : prog-208-p-05-2029)
-// From it we deduce the bimester (last 2 digits of the 3 digits group) and the
-// "stubborn" (ex : P5). Returns 0 on success, 1 if nothing reliable can be
-// deduced (the repository then goes to the "Others" folder).
 static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
                            size_t stubborn_size)
 {
@@ -149,6 +144,22 @@ int main(int argc, char *argv[])
     char *main_folder_path = GetOrCreateRepoRoot();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
+
+    // The root path must end with '/', otherwise the relative folders
+    // ("Others", "S1/B1") get glued to its name (ex : EPITA-TPsOthers)
+    size_t root_length = strlen(main_folder_path);
+    if (root_length == 0 || main_folder_path[root_length - 1] != '/')
+    {
+        char *slashed_path = realloc(main_folder_path, root_length + 2);
+        if (slashed_path == NULL)
+        {
+            free(main_folder_path);
+            err(EXIT_FAILURE, "realloc");
+        }
+        main_folder_path = slashed_path;
+        main_folder_path[root_length] = '/';
+        main_folder_path[root_length + 1] = '\0';
+    }
 
     size_t size_relative_path;
     char **relative_path = __GetRelavitvePath(argv[1], &size_relative_path);

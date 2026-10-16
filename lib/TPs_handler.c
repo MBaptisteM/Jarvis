@@ -53,6 +53,35 @@ char *CreateTPsPath()
     return final_path;
 }
 
+// Look for an already cloned root repository (REPO_NAME) in the user's tree.
+// Returns its path with a trailing '/', or NULL if there is none.
+static char *FindExistingRepoRoot(void)
+{
+    char *parent = FindFileBFS(REPO_NAME);
+    if (parent == NULL)
+        return NULL;
+
+    size_t path_size = strlen(parent) + strlen(REPO_NAME) + 8;
+    char *root_path = malloc(path_size);
+    if (root_path == NULL)
+    {
+        free(parent);
+        err(EXIT_FAILURE, "malloc");
+    }
+    snprintf(root_path, path_size, "%s/%s/", parent, REPO_NAME);
+    free(parent);
+
+    char git_path[path_size + sizeof(".git")];
+    snprintf(git_path, sizeof(git_path), "%s.git", root_path);
+    if (access(git_path, F_OK) != 0)
+    {
+        free(root_path);
+        return NULL;
+    }
+
+    return root_path;
+}
+
 // 0 : create | 1 : already created | 2 : cloned
 char *GetOrCreateRepoRoot()
 {
@@ -60,6 +89,15 @@ char *GetOrCreateRepoRoot()
 
     if (path == NULL)
     {
+        // Already cloned somewhere (e.g. the info file was lost) : reuse it
+        // instead of trying to clone it again
+        char *existing_path = FindExistingRepoRoot();
+        if (existing_path != NULL)
+        {
+            WriteInfo(NAME_PATH_INFO_FILE, existing_path);
+            return existing_path;
+        }
+
         // Already exist check
         char cmd_exist[SIZE_OF_STRING];
         snprintf(cmd_exist, sizeof(cmd_exist),
@@ -84,6 +122,8 @@ char *GetOrCreateRepoRoot()
             }
             snprintf(new_path, new_path_size, "%s/%s/", cwd, REPO_NAME);
             free(cwd);
+
+            WriteInfo(NAME_PATH_INFO_FILE, new_path);
 
             return new_path;
         }
