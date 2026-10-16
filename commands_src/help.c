@@ -34,6 +34,10 @@ int main(int argc, char *argv[])
         {
             HelpFind();
         }
+        else if (strcasecmp(argv[1], COMMAND_CLEAR) == 0)
+        {
+            HelpClear();
+        }
         else
         {
             printf("└! " BOLD RED "ERROR   : Command unknown." RESET "\n\n");
@@ -60,6 +64,9 @@ void Help()
 
     // find
     printf("find\t\tCommand to find specific repositories.\n");
+    // clear
+    printf("clear\t\tBack up, clean, and push the root repository.\n");
+
 
     // uninstall
     printf("uninstall\tCommand to uninstall Jarvis.\n");
@@ -158,6 +165,30 @@ void HelpPull()
     printf("│  jarvis %s all\n", COMMAND_PULL);
     printf("│  jarvis %s current\n", COMMAND_PULL);
     printf("│  jarvis %s my_project\n", COMMAND_PULL);
+    printf("│\n└─\n");
+}
+
+void HelpClear()
+{
+    printf("│\n");
+    printf("│  Push a backup, delete the root repository content except .git, and "
+           "push the cleaned repository.\n");
+    printf("│  The command asks for confirmation before deleting anything.\n");
+    printf("│  Backup uses force-with-lease and replaces remote-only commits.\n");
+    printf("│  Answer y or Y to confirm; otherwise the operation is cancelled.\n");
+    printf("│  .git is preserved. Ignored files are not backed up and cannot be\n");
+    printf("│  recovered with the restore command.\n");
+    printf("│  Restore: git -C <root> restore --source=<backup-hash> "
+           "--staged --worktree .\n");
+    printf("│  Then run: jarvis push root\n");
+
+    printf("│\n├─ " BOLD "USAGE\n" RESET);
+    printf("│\n");
+    printf("│  %s\n", COMMAND_CLEAR);
+
+    printf("│\n├─ " BOLD "EXAMPLE\n" RESET);
+    printf("│\n");
+    printf("│  jarvis %s\n", COMMAND_CLEAR);
     printf("│\n└─\n");
 }
 

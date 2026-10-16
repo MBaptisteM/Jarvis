@@ -21,6 +21,7 @@ char *GetTPsPath();
 void __RunCommand(const char *command);
 char *GetOrCreateRepoRoot();
 int PushRepoRoot(char *commit_name);
+int PushRepoRootForce(char *commit_name);
 void InstallGH();
 // void RestoreGitFolders();
 int PushRepo(char *repo_path, char *commit_name, char *tag);

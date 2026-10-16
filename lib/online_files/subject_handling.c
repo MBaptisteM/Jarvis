@@ -1,4 +1,5 @@
 #include "subject_handling.h"
+#include <ctype.h>
 
 // Get the subject
 int SubjectDownload(char *repo_name)
@@ -14,9 +15,7 @@ int SubjectDownload(char *repo_name)
     }
 
     if (subject_result)
-        errx(EXIT_FAILURE,
-             "ERROR Impossible to get the subject (failed twice). [Retry or "
-             "Auth again]");
+        return EXIT_FAILURE;
 
     // printf("\033[32mSubject downloaded.\033[0m\n");
     return EXIT_SUCCESS;
@@ -24,7 +23,10 @@ int SubjectDownload(char *repo_name)
 
 int CreateSubjectElements(char *repo_path, pid_t pid)
 {
-    waitpid(pid, NULL, 0);
+    int status;
+    if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status)
+        || WEXITSTATUS(status) != EXIT_SUCCESS)
+        return EXIT_FAILURE;
     printf("\033[32mSubject downloaded.\033[0m\n");
 
     char subject_path[SIZE_OF_STRING + 20];
@@ -33,7 +35,7 @@ int CreateSubjectElements(char *repo_path, pid_t pid)
 
     FILE *fp = fopen(subject_path, "r");
     if (!fp)
-        errx(EXIT_FAILURE, "ERROR Impossible to read the subject.");
+        return EXIT_FAILURE;
 
     if (chdir(repo_path) != 0)
         errx(EXIT_FAILURE, "ERROR Impossible to navigate through folders.");
@@ -147,9 +149,7 @@ char *GetSubjectModules(char *subject_path)
     FILE *file = fopen(subject_path, "r");
 
     if (!file)
-    {
-        errx(EXIT_FAILURE, "ERROR Impossible to open the subject");
-    }
+        return NULL;
 
     char buffer[1024 + 1];
     int found = 0;
@@ -178,25 +178,20 @@ char *GetSubjectModules(char *subject_path)
                     break;
                 }
 
-                content_h2 = start;
+                else
+                {
+                    fclose(file);
+                    return NULL;
+                }
             }
-        }
-        else
-        {
-            char *end = strstr(buffer, "</h2>");
-
-            if (end)
-            {
-                *end = 0;
-                strcat(content_h2, buffer);
-                break;
-            }
-            strcat(content_h2, buffer);
         }
     }
 
     if (!found)
-        errx(EXIT_FAILURE, "ERROR Impossible to find the modules studied.");
+    {
+        fclose(file);
+        return NULL;
+    }
 
     char *c = content_h2;
 
@@ -208,27 +203,38 @@ char *GetSubjectModules(char *subject_path)
     }
     size_t i = 0;
 
-    while (*c != 0)
+    int inside_tag = 0;
+    for (size_t j = 0; c[j] != '\0'; j++)
     {
-        if (*c == '<')
-            while (*c != 0 && *(c++) != '>')
-                ;
-
-        if (*c == ',')
-            modules[i++] = '-';
-
-        else if (*c != ' ')
+        unsigned char character = (unsigned char)c[j];
+        if (character == '<')
         {
-            if (*c >= 'A' && *c <= 'Z')
-                *c -= 'A' - 'a';
-
-            modules[i++] = *c;
+            inside_tag = 1;
+            continue;
         }
-
-        if (c != 0)
-            c++;
+        if (inside_tag)
+        {
+            if (character == '>')
+                inside_tag = 0;
+            continue;
+        }
+        if (isspace(character))
+            continue;
+        if (i >= 511)
+        {
+            free(modules);
+            fclose(file);
+            return NULL;
+        }
+        modules[i++] = (char)(character == ',' ? '-' : tolower(character));
     }
-    modules[i] = 0;
+    if (inside_tag || i == 0)
+    {
+        free(modules);
+        fclose(file);
+        return NULL;
+    }
+    modules[i] = '\0';
 
     fclose(file);
     return modules;

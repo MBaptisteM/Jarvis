@@ -68,9 +68,7 @@ int GetSubject(char *repo_name)
 
     FILE *fp_subject = popen(cmd_subject, "r");
     if (!fp_subject)
-    {
-        errx(EXIT_FAILURE, "ERROR Impossible to load the subject.");
-    }
+        return EXIT_FAILURE;
 
     char buffer[256];
     while (fgets(buffer, sizeof(buffer), fp_subject) != NULL)
@@ -79,8 +77,8 @@ int GetSubject(char *repo_name)
     }
 
     int status = pclose(fp_subject);
-    if (!WIFEXITED(status))
-        errx(EXIT_FAILURE, "ERROR Impossible to download the document");
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return EXIT_FAILURE;
 
     return EXIT_SUCCESS;
 }

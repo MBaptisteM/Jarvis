@@ -1,5 +1,74 @@
 #include "find.h"
 
+#include <ctype.h>
+
+// Strictly parse the course id of an EPITA url (same rule as clone.c) :
+// a path component shaped like <letters>-<3 digits>-<letter>-<2 digits>-<4
+// digits> (ex : prog-208-p-05-2029). Returns 0 on success, 1 otherwise (the
+// repository then lives in the "Others" folder).
+static int __FindParseCourseId(const char *url, int *bimester, char *stubborn)
+{
+    const char *start = url;
+
+    while (1)
+    {
+        const char *end = start;
+        while (*end != '\0' && *end != '/' && *end != ':')
+            end++;
+
+        size_t length = (size_t)(end - start);
+        size_t i = 0;
+        while (i < length && isalpha((unsigned char)start[i]))
+            i++;
+
+        const char *p = start + i;
+        if (i > 0 && length - i == 14 && p[0] == '-'
+            && isdigit((unsigned char)p[1]) && isdigit((unsigned char)p[2])
+            && isdigit((unsigned char)p[3]) && p[4] == '-'
+            && isalpha((unsigned char)p[5]) && p[6] == '-'
+            && isdigit((unsigned char)p[7]) && isdigit((unsigned char)p[8])
+            && p[9] == '-' && isdigit((unsigned char)p[10])
+            && isdigit((unsigned char)p[11]) && isdigit((unsigned char)p[12])
+            && isdigit((unsigned char)p[13]))
+        {
+            int num_bimester = (p[2] - '0') * 10 + (p[3] - '0');
+            if (num_bimester < 1)
+                return 1;
+
+            if (bimester != NULL)
+                *bimester = num_bimester;
+
+            if (stubborn != NULL)
+            {
+                size_t k = 0;
+                stubborn[k++] = (char)toupper((unsigned char)p[5]);
+                if (p[7] != '0')
+                    stubborn[k++] = p[7];
+                stubborn[k++] = p[8];
+                stubborn[k] = '\0';
+            }
+            return 0;
+        }
+
+        if (*end == '\0')
+            break;
+        start = end + 1;
+    }
+
+    return 1;
+}
+
+// Join a parent folder (as returned by FindFileBFS) and a folder name
+static char *__JoinFound(const char *parent, const char *name)
+{
+    size_t size = strlen(parent) + strlen(name) + 2;
+    char *path = malloc(size);
+    if (path == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(path, size, "%s/%s", parent, name);
+    return path;
+}
+
 int main(int argc, char *argv[])
 {
     // Case no argument, or "root": print the url of the root repository
@@ -135,6 +204,11 @@ void __FindCurrent(void)
                  repo_name);
         }
 
+        // FindFileBFS returns the parent folder of what was found
+        char *parent_path = path;
+        path = __JoinFound(parent_path, repo_name);
+        free(parent_path);
+
         // Keep the current repository up to date in the logs
         WriteInfo("current", path);
     }
@@ -186,7 +260,10 @@ void __FindRepository(char *repo_arg)
                      "to re-clone it)",
                      repo_name);
 
-            printf("%s\n", found_path);
+            // FindFileBFS returns the parent folder of what was found
+            char *joined_path = __JoinFound(found_path, repo_name);
+            printf("%s\n", joined_path);
+            free(joined_path);
             free(found_path);
         }
         else
@@ -235,11 +312,14 @@ int __IsEpitaUrl(char *url)
 // url, the same way __GetRelavitvePath does in clone.c
 void __ExtractRelativePath(char *url, char *semester_out, char *bimester_out)
 {
-    int k = 0;
-    while (url[k] < '0' || url[k] > '9')
-        k++;
-
-    int num_bimester = (url[k + 1] - '0') * 10 + (url[k + 2] - '0');
+    int num_bimester;
+    if (__FindParseCourseId(url, &num_bimester, NULL) != 0)
+    {
+        // Not deducible : the repo is in the "Others" folder (no bimester)
+        snprintf(semester_out, SIZE_OF_STRING, "%s", "Others");
+        bimester_out[0] = '\0';
+        return;
+    }
     int num_semester = num_bimester / 2 + num_bimester % 2;
 
     snprintf(semester_out, SIZE_OF_STRING, "%s%d", SEMESTER, num_semester);
@@ -251,36 +331,8 @@ void __ExtractRelativePath(char *url, char *semester_out, char *bimester_out)
 // Returns 0 on success, 1 if the url doesn't have the expected shape.
 int __ExtractStubborn(char *url, char *stubborn_out)
 {
-    char *c = url;
-
-    while (*c != 0 && (*c < '0' || *c > '9'))
-        c++;
-
-    while (*c != 0 && *c != '-')
-        c++;
-
-    if (*c == 0)
-        return 1;
-
-    c++;
-
-    size_t i = 0;
-
-    if (*c >= 'a' && *c <= 'z')
-        stubborn_out[i++] = *(c++) + 'A' - 'a';
-    else
-        stubborn_out[i++] = *(c++);
-
-    c++;
-
-    if (*c != '0')
-        stubborn_out[i++] = *c;
-    c++;
-    stubborn_out[i++] = *c;
-
-    stubborn_out[i] = 0;
-
-    return 0;
+    int unused_bimester;
+    return __FindParseCourseId(url, &unused_bimester, stubborn_out);
 }
 
 // Given an EPITA git url that isn't registered as-is in the info files,
@@ -353,6 +405,27 @@ void __FindEpitaUrlInTree(char *url)
             }
 
             closedir(dir);
+        }
+    }
+
+    // "Others" : the folder keeps the name of the git repository
+    if (bimester[0] == '\0')
+    {
+        const char *last = strrchr(url, '/');
+        last = last == NULL ? url : last + 1;
+        size_t name_len = strlen(last);
+        if (name_len > 4 && strcmp(last + name_len - 4, ".git") == 0)
+            name_len -= 4;
+
+        size_t size_other_path = strlen(target_path) + name_len + 2;
+        char other_path[size_other_path];
+        snprintf(other_path, size_other_path, "%s/%.*s", target_path,
+                 (int)name_len, last);
+
+        if (IsDirectory(other_path))
+        {
+            printf("%s\n", other_path);
+            found_any = 1;
         }
     }
 

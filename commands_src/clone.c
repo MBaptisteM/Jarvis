@@ -2,6 +2,69 @@
 
 #include "clone_root.h"
 
+#include <ctype.h>
+
+#define OTHERS_FOLDER_NAME "Others"
+
+// Strictly parse the course id of an EPITA repository url.
+// The url must contain a path component shaped like
+// <letters>-<3 digits>-<letter>-<2 digits>-<4 digits> (ex : prog-208-p-05-2029)
+// From it we deduce the bimester (last 2 digits of the 3 digits group) and the
+// "stubborn" (ex : P5). Returns 0 on success, 1 if nothing reliable can be
+// deduced (the repository then goes to the "Others" folder).
+static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
+                           size_t stubborn_size)
+{
+    const char *start = url;
+
+    while (1)
+    {
+        const char *end = start;
+        while (*end != '\0' && *end != '/' && *end != ':')
+            end++;
+
+        size_t length = (size_t)(end - start);
+        size_t i = 0;
+        while (i < length && isalpha((unsigned char)start[i]))
+            i++;
+
+        const char *p = start + i;
+        if (i > 0 && length - i == 14 && p[0] == '-'
+            && isdigit((unsigned char)p[1]) && isdigit((unsigned char)p[2])
+            && isdigit((unsigned char)p[3]) && p[4] == '-'
+            && isalpha((unsigned char)p[5]) && p[6] == '-'
+            && isdigit((unsigned char)p[7]) && isdigit((unsigned char)p[8])
+            && p[9] == '-' && isdigit((unsigned char)p[10])
+            && isdigit((unsigned char)p[11]) && isdigit((unsigned char)p[12])
+            && isdigit((unsigned char)p[13]))
+        {
+            int num_bimester = (p[2] - '0') * 10 + (p[3] - '0');
+            if (num_bimester < 1)
+                return EXIT_FAILURE;
+
+            if (bimester != NULL)
+                *bimester = num_bimester;
+
+            if (stubborn != NULL && stubborn_size >= 4)
+            {
+                size_t k = 0;
+                stubborn[k++] = (char)toupper((unsigned char)p[5]);
+                if (p[7] != '0')
+                    stubborn[k++] = p[7];
+                stubborn[k++] = p[8];
+                stubborn[k] = '\0';
+            }
+            return EXIT_SUCCESS;
+        }
+
+        if (*end == '\0')
+            break;
+        start = end + 1;
+    }
+
+    return EXIT_FAILURE;
+}
+
 // baptiste.mahe@git.forge.epita.fr:p/epita-prepa-computer-science/prog-208-p-05-2029/epita-prepa-computer-science-prog-208-p-05-2029-baptiste.mahe.git
 // https://intra.forge.epita.fr/epita-prepa-computer-science/prog-101-p-00-2029/root/prog-101-p-00-2029
 
@@ -22,6 +85,12 @@ int main(int argc, char *argv[])
     {
         // Get the current repository
         current_repo_url = GetCurrentRepo();
+        if (current_repo_url == NULL)
+        {
+            printf("\033[1;31mWARNING No git url available for this "
+                   "repository, nothing was cloned.\033[0m\n");
+            return EXIT_FAILURE;
+        }
         argv[1] = current_repo_url;
     }
 
@@ -33,8 +102,8 @@ int main(int argc, char *argv[])
 
         size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
-        snprintf(command_clone, command_size, "git submodule add --force %s",
-                 argv[1]);
+        snprintf(command_clone, command_size,
+                 "git submodule add --force \"%s\"", argv[1]);
 
         if (system(command_clone))
             errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
@@ -73,12 +142,7 @@ int main(int argc, char *argv[])
     pid_t pid_get_subjects = fork();
     if (pid_get_subjects == 0)
     {
-        if (SubjectDownload(argv[1]))
-            errx(EXIT_FAILURE,
-                 "ERROR Impossible to get the subjects, check your connection "
-                 "or try to Auth again.");
-
-        exit(EXIT_SUCCESS);
+        exit(SubjectDownload(argv[1]));
     }
 
     // CREATE PATH
@@ -215,8 +279,8 @@ int main(int argc, char *argv[])
         // snprintf(command_clone, command_size, "git -C %s clone %s",
         // main_folder_path, argv[1]);
         snprintf(command_clone, command_size,
-                 "git -C %s submodule add --force %s", main_folder_path,
-                 argv[1]);
+                 "git -C \"%s\" submodule add --force \"%s\"",
+                 main_folder_path, argv[1]);
 
         // Check if the clone is empty
         if (system(command_clone))
@@ -269,8 +333,11 @@ int main(int argc, char *argv[])
 
             if (need_to_be_renamed)
             {
-                waitpid(pid_get_subjects, NULL, 0);
-                printf("\033[32mSubject downloaded.\033[0m\n");
+                int subject_status;
+                if (waitpid(pid_get_subjects, &subject_status, 0) >= 0
+                    && WIFEXITED(subject_status)
+                    && WEXITSTATUS(subject_status) == EXIT_SUCCESS)
+                    printf("\033[32mSubject downloaded.\033[0m\n");
             }
             else
             {
@@ -302,9 +369,15 @@ int main(int argc, char *argv[])
         CreateSubjectElements(repo_path, pid_get_subjects);
     }
 
-    // Rename the child repository
+    // Rename the child repository (only possible when the course id could be
+    // deduced from the url, else the repo keeps its name inside "Others")
     if (need_to_be_renamed)
-        __RenameRepo(repo_path, argv[1]);
+    {
+        if (__ParseCourseId(argv[1], NULL, NULL, 0) == EXIT_SUCCESS)
+            __RenameRepo(repo_path, argv[1]);
+        else
+            WriteInfo(argv[1], repo_name);
+    }
 
     char *name_repo;
     if (ReadInfo(argv[1], &name_repo))
@@ -397,35 +470,20 @@ int __RenameRepo(char *repo_path, char *repo_name)
     char stubborn[SIZE_OF_STRING];
     size_t i = 0;
 
-    char *c = repo_name;
+    char *c = NULL;
 
-    // Skip useless part
-    while (*c != 0 && (*c < '0' || *c > '9'))
-        c++;
-
-    while (*c != 0 && *c != '-')
-        c++;
-
-    if (*c == 0)
-        errx(EXIT_FAILURE, "ERROR This is not an epita repository.");
-
-    c++;
-
-    // Letter
-    if (*c >= 'a' && *c <= 'z')
-        stubborn[i++] = *(c++) + 'A' - 'a';
-    else
-        stubborn[i++] = *(c++);
-
-    c++;
-
-    // Number
-    if (*c != '0')
-        stubborn[i++] = *c;
-    c++;
-    stubborn[i++] = *c;
-
-    stubborn[i] = 0;
+    int unused_bimester;
+    if (__ParseCourseId(repo_name, &unused_bimester, stubborn, sizeof(stubborn))
+        != EXIT_SUCCESS)
+    {
+        char *fallback = strrchr(repo_path, '/');
+        fallback = fallback == NULL ? repo_path : fallback + 1;
+        printf("\033[33mWARNING Impossible to deduce the course of this "
+               "repository; keeping the name %s.\033[0m\n",
+               fallback);
+        WriteInfo(repo_name, fallback);
+        return EXIT_FAILURE;
+    }
 
     // NAME
     char *raw_name = NULL;
@@ -511,7 +569,15 @@ int __RenameRepo(char *repo_path, char *repo_name)
 
     char *modules = GetSubjectModules(subject_path);
     if (!modules)
-        errx(EXIT_FAILURE, "Impossible to read the subject.");
+    {
+        char *fallback_name = strrchr(repo_path, '/');
+        fallback_name = fallback_name == NULL ? repo_path : fallback_name + 1;
+        printf("\033[33mWARNING Subject unavailable or invalid; keeping "
+               "repository name %s.\033[0m\n",
+               fallback_name);
+        WriteInfo(repo_name, fallback_name);
+        return EXIT_SUCCESS;
+    }
 
     // ALL TOGETHER & RENAME
     char full_name[strlen(stubborn) + strlen(name) + strlen(modules) + 20];
@@ -563,13 +629,16 @@ int __RenameRepo(char *repo_path, char *repo_name)
     snprintf(final_dest, sizeof(final_dest), "%s/%s", rel_path, full_name);
 
     // --- SOLUTION SANS COMMIT, AVEC NETTOYAGE COMPLET DES REFERENCES ---
+    // "git mv" moves the folder AND updates the index and .gitmodules, so the
+    // submodule keeps a valid url. If the repo is not registered as a
+    // submodule (ex : empty repository), fall back to a plain mv.
     char rename_command[2048];
     snprintf(rename_command, sizeof(rename_command),
              "cd \"%s\" && "
-             "mv \"%s\" \"%s\" && "
-             "git submodule absorbgitdirs \"%s\" && "
-             "git add \"%s\"",
-             root_folder, rel_repo_path, final_dest, final_dest, final_dest);
+             "(git mv -- \"%s\" \"%s\" || mv -- \"%s\" \"%s\") && "
+             "(git submodule absorbgitdirs -- \"%s\" || true)",
+             root_folder, rel_repo_path, final_dest, rel_repo_path, final_dest,
+             final_dest);
 
     printf("COMMAND : %s\n", rename_command);
 
@@ -612,12 +681,19 @@ char **__GetRelavitvePath(char *repo_name, size_t *size)
         err(EXIT_FAILURE, "malloc");
     (*size) = 0;
 
-    int k = 0;
-
-    while (repo_name[k] < '0' || repo_name[k] > '9')
-        k++;
-
-    int num_bimester = (repo_name[k + 1] - '0') * 10 + (repo_name[k + 2] - '0');
+    int num_bimester;
+    if (__ParseCourseId(repo_name, &num_bimester, NULL, 0) != EXIT_SUCCESS)
+    {
+        // Impossible to deduce the semester/bimester : "Others" folder
+        (*size) = 1;
+        relative_path[0] = strdup(OTHERS_FOLDER_NAME);
+        if (relative_path[0] == NULL)
+        {
+            free(relative_path);
+            err(EXIT_FAILURE, "strdup");
+        }
+        return relative_path;
+    }
     int num_semester = num_bimester / 2 + num_bimester % 2;
 
     (*size)++;
@@ -659,7 +735,10 @@ int __OneLayerFindOrCreate(char *path, char *name, int is_folder)
     // Iterate trough all files and check if they are what we are looking for
     while ((file = readdir(dir)) != NULL)
     {
-        if (stat(file->d_name, &info) == 0)
+        // stat the entry relative to "path", not to the current directory
+        char entry_path[4096];
+        snprintf(entry_path, sizeof(entry_path), "%s/%s", path, file->d_name);
+        if (stat(entry_path, &info) == 0)
         {
             if (S_ISDIR(info.st_mode) && is_folder)
             {

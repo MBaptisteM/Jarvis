@@ -105,11 +105,19 @@ int main(int argc, char *argv[])
         if (path_allocated)
             free(path);
 
-        path = FindFileBFS(repo_name);
-        if (path == NULL)
+        char *parent_path = FindFileBFS(repo_name);
+        if (parent_path == NULL)
             errx(EXIT_FAILURE,
                  "ERROR Impossible to find the current repository %s locally",
                  repo_name);
+
+        // FindFileBFS returns the parent folder of what was found
+        size_t found_size = strlen(parent_path) + strlen(repo_name) + 2;
+        path = malloc(found_size);
+        if (path == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(path, found_size, "%s/%s", parent_path, repo_name);
+        free(parent_path);
         path_allocated = 1;
     }
 
@@ -209,7 +217,7 @@ void __GetId(char **entry, char *path)
     {
         char command_names_push[SIZE_OF_STRING + strlen(path)];
         snprintf(command_names_push, SIZE_OF_STRING + strlen(path),
-                 "git -C %s --no-pager log --format=%s", path, "%s");
+                 "git -C \"%s\" --no-pager log --format=%s", path, "%s");
 
         FILE *fp = popen(command_names_push, "r");
         char line[1024];

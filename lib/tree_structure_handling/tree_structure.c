@@ -1,4 +1,5 @@
 #include "tree_structure.h"
+#include <sys/wait.h>
 
 int IsEmpty(char *path)
 {
@@ -44,9 +45,20 @@ int CleanFolder(char *folder_path)
             && strcmp(entry->d_name, ".git") != 0)
         {
             char to_remove_path[1024];
-            snprintf(to_remove_path, 1024, "rm -rf %s/%s", folder_path,
-                     entry->d_name);
-            if (system(to_remove_path))
+            snprintf(to_remove_path, sizeof(to_remove_path), "%s/%s",
+                     folder_path, entry->d_name);
+            pid_t child = fork();
+            if (child < 0)
+                err(EXIT_FAILURE, "fork");
+            if (child == 0)
+            {
+                execlp("rm", "rm", "-rf", "--", to_remove_path,
+                       (char *)NULL);
+                _exit(EXIT_FAILURE);
+            }
+            int status;
+            if (waitpid(child, &status, 0) < 0 || !WIFEXITED(status)
+                || WEXITSTATUS(status) != 0)
                 errx(EXIT_FAILURE, "ERROR Impossible ro remove %s/%s",
                      folder_path, entry->d_name);
         }

@@ -60,6 +60,47 @@ static char *__FindRootRepository(char *recorded_path)
     return recorded_path;
 }
 
+// Shell script (run from the repository root) that repairs gitlinks present in
+// the index but missing from .gitmodules, which makes every "git submodule"
+// command fail with "No url found for submodule path". A nested repo that has
+// a remote gets registered back in .gitmodules, anything else is removed from
+// the index.
+static const char *HEAL_SUBMODULES_SCRIPT =
+    "git ls-files --stage | awk -F'\\t' '$1 ~ /^160000/ {print $2}' | "
+    "while IFS= read -r p; do "
+    "git config -f .gitmodules --get-regexp '^submodule\\..*\\.path$' "
+    "2>/dev/null | sed 's/^[^ ]* //' | grep -qxF -- \"$p\" && continue; "
+    "url=''; "
+    "if [ -e \"$p/.git\" ]; then "
+    "url=$(git -C \"$p\" remote get-url origin 2>/dev/null); fi; "
+    "if [ -n \"$url\" ]; then "
+    "echo \"Jarvis: registering submodule $p in .gitmodules\"; "
+    "git config -f .gitmodules \"submodule.$p.path\" \"$p\" && "
+    "git config -f .gitmodules \"submodule.$p.url\" \"$url\" && "
+    "git add .gitmodules; "
+    "else "
+    "echo \"Jarvis: removing orphan submodule entry $p (no url, no git "
+    "repo)\"; "
+    "git rm --cached -q -f -- \"$p\"; "
+    "fi; done; true";
+
+static void __HealSubmodules(const char *repo_path)
+{
+    size_t command_size =
+        strlen(repo_path) + strlen(HEAL_SUBMODULES_SCRIPT) + 16;
+    char *command = malloc(command_size);
+    if (command == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    snprintf(command, command_size, "cd \"%s\" && %s", repo_path,
+             HEAL_SUBMODULES_SCRIPT);
+    if (system(command) != 0)
+        printf("\033[33mWARNING Impossible to check the submodules of "
+               "%s.\033[0m\n",
+               repo_path);
+    free(command);
+}
+
 // Pull the root repository and all its submodules
 void __PullMain(void)
 {
@@ -240,13 +281,21 @@ void __PullRepository(char *repo_arg)
                  "re-clone it)",
                  repo_name);
 
-        __PullRepo(found_path);
+        // FindFileBFS returns the parent folder of what was found
+        size_t found_size = strlen(found_path) + strlen(repo_name) + 2;
+        char *found_repo = malloc(found_size);
+        if (found_repo == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(found_repo, found_size, "%s/%s", found_path, repo_name);
+        free(found_path);
+
+        __PullRepo(found_repo);
 
         // Save this repository as the current one, same pattern as the other
         // commands
-        WriteInfo("current", found_path);
+        WriteInfo("current", found_repo);
 
-        free(found_path);
+        free(found_repo);
     }
     else
     {
@@ -261,11 +310,6 @@ void __PullRepository(char *repo_arg)
     free(main_folder_path);
 }
 
-// Actually run "git pull" on a repository and show what got pulled.
-// Also recurses into every submodule (nested ones included) and, if a
-// submodule's recorded commit no longer exists on its remote (e.g. after
-// a force-push/rebase upstream), automatically resyncs it to the remote's
-// current default branch instead of aborting the whole pull.
 void __PullRepo(char *repo_path)
 {
     printf("\033[1;32mPulling :\033[0m\n\033[1m%s\033[0m\n\n", repo_path);
@@ -279,7 +323,10 @@ void __PullRepo(char *repo_path)
         errx(EXIT_FAILURE, "ERROR Impossible to pull the repository %s",
              repo_path);
 
-    // 2. Make sure every submodule is initialized/checked out before pulling
+    // Repair gitlinks that have no url in .gitmodules
+    __HealSubmodules(repo_path);
+
+    // Make sure every submodule is initialized/checked out before pulling
     size_t init_command_size = strlen(repo_path) + SIZE_OF_STRING;
     char init_command[init_command_size];
     snprintf(init_command, init_command_size,
@@ -287,30 +334,31 @@ void __PullRepo(char *repo_path)
     if (system(init_command) == -1)
         errx(EXIT_FAILURE, "ERROR impossible to update the submodules");
 
-    // 3. Pull every submodule recursively. If a submodule's own "git pull"
-    // fails (typically because the commit pinned by the parent repo is no
-    // longer reachable on its remote), fetch it and resync it on top of
-    // its remote's current default branch instead of stopping everything.
-    size_t submodule_command_size = strlen(repo_path) + 1024;
+    // Pull every submodule recursively
+    size_t submodule_command_size = strlen(repo_path) + 2048;
     char submodule_command[submodule_command_size];
     snprintf(
         submodule_command, submodule_command_size,
         "git -C \"%s\" submodule foreach --recursive '"
         "if ! git pull; then "
+        "default_branch=$(git remote show origin 2>/dev/null | sed -n "
+        "\"/HEAD branch/s/.*: //p\"); "
+        "if [ -z \"$default_branch\" ] || [ \"$default_branch\" = "
+        "\"(unknown)\" ]; then "
+        "echo \"$name: nothing to pull (empty or unreachable remote), "
+        "skipped.\"; "
+        "elif [ -n \"$(git status --porcelain)\" ]; then "
+        "echo \"WARNING: $name could not be pulled and has local changes, "
+        "not resyncing it, please fix it manually.\"; "
+        "else "
         "echo \"WARNING: submodule $name has a stale or unreachable commit, "
         "resyncing with its remote...\"; "
         "git fetch origin; "
-        "default_branch=$(git remote show origin | sed -n \"/HEAD branch/s/.*: "
-        "//p\"); "
-        "if [ -n \"$default_branch\" ]; then "
         "(git checkout \"$default_branch\" 2>/dev/null || git checkout -b "
         "\"$default_branch\" \"origin/$default_branch\"); "
         "git reset --hard \"origin/$default_branch\" "
         "&& echo \"Resynced $name to origin/$default_branch\" "
         "|| echo \"ERROR: could not resync $name, please fix it manually.\"; "
-        "else "
-        "echo \"ERROR: could not determine the default branch for $name, "
-        "please fix it manually.\"; "
         "fi; "
         "fi'",
         repo_path);

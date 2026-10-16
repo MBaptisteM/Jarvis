@@ -219,6 +219,31 @@ void CleanupOnExit()
         errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");
 }
 
+// Shell script (run from the repository root) that repairs gitlinks present in
+// the index but missing from .gitmodules. "git add -A" creates such gitlinks
+// as soon as a nested repo has a commit (ex : after the first push of a
+// freshly cloned TP), and every "git submodule" command then fails with "No
+// url found for submodule path". A nested repo that has a remote gets
+// registered in .gitmodules, anything else is removed from the index.
+static const char *HEAL_SUBMODULES_SCRIPT =
+    "git ls-files --stage | awk -F'\\t' '$1 ~ /^160000/ {print $2}' | "
+    "while IFS= read -r p; do "
+    "git config -f .gitmodules --get-regexp '^submodule\\..*\\.path$' "
+    "2>/dev/null | sed 's/^[^ ]* //' | grep -qxF -- \"$p\" && continue; "
+    "url=''; "
+    "if [ -e \"$p/.git\" ]; then "
+    "url=$(git -C \"$p\" remote get-url origin 2>/dev/null); fi; "
+    "if [ -n \"$url\" ]; then "
+    "echo \"Jarvis: registering submodule $p in .gitmodules\"; "
+    "git config -f .gitmodules \"submodule.$p.path\" \"$p\" && "
+    "git config -f .gitmodules \"submodule.$p.url\" \"$url\" && "
+    "git add .gitmodules; "
+    "else "
+    "echo \"Jarvis: removing orphan submodule entry $p (no url, no git "
+    "repo)\"; "
+    "git rm --cached -q -f -- \"$p\"; "
+    "fi; done; true";
+
 int AddRepoRoot()
 {
     atexit(CleanupOnExit);
@@ -234,11 +259,36 @@ int AddRepoRoot()
     //     "find . -type d -name '.git' ! -path './.git' "
     //     "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.temp_renames_git\"' _ {}
     //     \\; "
+    const char *park_command =
+        "find . -path './.git' -prune -o -name .git -prune "
+        "-exec sh -c 'for git_dir do repo=${git_dir%/.git}; "
+        "if ! git -C \"$repo\" rev-parse --verify HEAD >/dev/null 2>&1; "
+        "then test ! -e \"$git_dir.jarvis-tmp\" && "
+        "mv -- \"$git_dir\" \"$git_dir.jarvis-tmp\" || exit 1; "
+        "fi; done' _ {} +";
+    const char *restore_command =
+        "find . -path './.git' -prune -o -name .git.jarvis-tmp -prune "
+        "-exec sh -c 'for saved do mv -- \"$saved\" "
+        "\"${saved%.jarvis-tmp}\" || exit 1; done' _ {} +";
+
+    if (system(park_command))
+    {
+        if (system(restore_command) != 0)
+            printf("WARNING Unable to restore nested Git metadata.\n");
+        return EXIT_FAILURE;
+    }
     //     "> /dev/null 2>&1"
     // )) {}
 
     // Add
-    if (system("git add ."))
+    int add_result = system("git add -A -- . ':(exclude)**/.git.jarvis-tmp' ':(exclude)**/.git.jarvis-tmp/**'");
+    int restore_result = system(restore_command);
+    int stale_metadata_result =
+        system("git ls-files -z -- ':(glob)**/.git.jarvis-tmp' | xargs -0 -r git add -u --");
+    // Every nested repo with a commit must be declared in .gitmodules
+    int heal_result = system(HEAL_SUBMODULES_SCRIPT);
+    if (add_result != 0 || restore_result != 0 || stale_metadata_result != 0
+        || heal_result != 0)
     {
         printf("\033[31mWARNING Impossible to add elements in the root "
                "repo\033[0m\n");
@@ -252,7 +302,7 @@ int AddRepoRoot()
     return EXIT_SUCCESS;
 }
 
-int PushRepoRoot(char *commit_name)
+static int __PushRepoRoot(char *commit_name, int force_push)
 {
     char *path = GetOrCreateRepoRoot();
 
@@ -260,18 +310,30 @@ int PushRepoRoot(char *commit_name)
         err(EXIT_FAILURE, "chdir(%s)", path);
     free(path);
 
-    // Commit
-    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
-    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name),
-             "git commit -m \"%s\" > /dev/null", commit_name);
-    if (system(commit_command))
+    // Commit only when AddRepoRoot staged changes.
+    int staged_changes = system("git diff --cached --quiet");
+    if (staged_changes == -1 || !WIFEXITED(staged_changes)
+        || WEXITSTATUS(staged_changes) > 1)
     {
-        printf("\033[31mWARNING Impossible to commit the root repo\033[0m\n");
+        printf("\033[31mWARNING Impossible to check changes in the root repo"
+               "\033[0m\n");
         return EXIT_FAILURE;
     }
+    if (WEXITSTATUS(staged_changes) == 1)
+    {
+        char commit_command[SIZE_OF_STRING + strlen(commit_name)];
+        snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name),
+                 "git commit -m \"%s\" > /dev/null", commit_name);
+        if (system(commit_command))
+        {
+            printf("\033[31mWARNING Impossible to commit the root repo"
+                   "\033[0m\n");
+            return EXIT_FAILURE;
 
+        }
+    }
     // Push
-    if (system("git push"))
+    if (system(force_push ? "git push --force-with-lease" : "git push"))
     {
         printf("\033[31mWARNING Impossible to push the root repo\033[0m\n");
         return EXIT_FAILURE;
@@ -280,6 +342,16 @@ int PushRepoRoot(char *commit_name)
     printf("\033[32mRepo root sucessfuly pushed\033[0m\n");
 
     return EXIT_SUCCESS;
+}
+
+int PushRepoRoot(char *commit_name)
+{
+    return __PushRepoRoot(commit_name, 0);
+}
+
+int PushRepoRootForce(char *commit_name)
+{
+    return __PushRepoRoot(commit_name, 1);
 }
 
 int PushRepo(char *repo_path, char *commit_name, char *tag)

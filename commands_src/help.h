@@ -15,6 +15,7 @@
 #define COMMAND_UNINSTALL "uninstall"
 #define COMMAND_PULL "pull"
 #define COMMAND_FIND "find"
+#define COMMAND_CLEAR "clear"
 
 void Help();
 void HelpClone();
@@ -22,3 +23,4 @@ void HelpUninstall();
 void HelpAuth();
 void HelpPull();
 void HelpFind();
+void HelpClear();

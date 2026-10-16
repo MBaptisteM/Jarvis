@@ -1,5 +1,7 @@
 #include "current_handling.h"
 
+#include <ctype.h>
+
 typedef struct
 {
     char *url;
@@ -311,127 +313,256 @@ char **ExtractProjects(char *file_path, int *size)
     return projects_pages;
 }
 
-char *ExtractRepo(char *url)
+char *GetInfoPath();
+
+// ---------------------------------------------------------------------------
+// ExtractRepo helpers : none of them stops the program, they only return NULL
+// when they cannot do their job so that the next fallback can take over.
+// ---------------------------------------------------------------------------
+
+static char *__DuplicateRange(const char *start, size_t length)
 {
-    if (PageDownload(url, "RepoRoot.html") == EXIT_FAILURE)
-        errx(EXIT_FAILURE,
-             "ERROR impossible to download the repo page (check yout internet "
-             "connection)");
+    char *copy = malloc(length + 1);
+    if (copy == NULL)
+        err(EXIT_FAILURE, "malloc");
+    memcpy(copy, start, length);
+    copy[length] = '\0';
+    return copy;
+}
 
-    char file_path[SIZE_OF_STRING];
-    char *dotjarvis_path = NULL;
-    if (GetDotJarvisPath(&dotjarvis_path))
-        errx(EXIT_FAILURE, "ERROR Impossible to find the .jarvis file");
-    snprintf(file_path, sizeof(file_path), "%s/RepoRoot.html", dotjarvis_path);
+// Ask a question on stdin, NULL if the answer is empty or stdin is closed
+static char *__PromptLine(const char *message)
+{
+    printf("%s", message);
+    fflush(stdout);
 
+    char buffer[1024];
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+        return NULL;
+
+    buffer[strcspn(buffer, "\r\n")] = '\0';
+    if (buffer[0] == '\0')
+        return NULL;
+
+    return __DuplicateRange(buffer, strlen(buffer));
+}
+
+// Download a page without ever stopping the program. 0 on success.
+static int __SoftPageDownload(char *url, char *file_name)
+{
+    int result = DowloadPage(url, file_name);
+    if (result)
+        result = DowloadPage(url, file_name);
+
+    if (result)
+        printf("\033[33mWARNING Impossible to download %s\033[0m\n", url);
+    else
+        printf("Downloaded with %s%s in %s\n", URL, url, file_name);
+
+    return result;
+}
+
+// Read the git url written on the repository page (gitUrl ... value="...")
+static char *__FindGitUrlInPage(const char *file_path)
+{
     FILE *file = fopen(file_path, "r");
-
-    if (!file)
-        errx(EXIT_FAILURE, "ERROR Impossible to open the file %s", file_path);
+    if (file == NULL)
+        return NULL;
 
     char buffer[2048 + 1];
-    char *c = NULL;
+    char *result = NULL;
+    int in_git_url = 0;
 
-    while (fgets(buffer, 1024, file) && c == NULL)
+    while (result == NULL && fgets(buffer, sizeof(buffer), file))
     {
-        c = strstr(buffer, "list__item");
+        if (strstr(buffer, "gitUrl"))
+            in_git_url = 1;
+        if (!in_git_url)
+            continue;
+
+        char *value = strstr(buffer, "value");
+        if (value == NULL || strlen(value) < 8)
+            continue;
+        value += 7;
+
+        size_t length = 0;
+        while (value[length] != '\0' && value[length] != '"')
+            length++;
+        if (length > 0)
+            result = __DuplicateRange(value, length);
     }
-
-    if (c == NULL)
-        errx(EXIT_FAILURE, "ERROR Root of the repository not found");
-
-    c = strstr(c, "href");
-    c += 6;
-
-    int ind_next_page = 0;
-    char path_next_page[SIZE_OF_STRING];
-    while (*c != '\"')
-        path_next_page[ind_next_page++] = *(c++);
-
-    path_next_page[ind_next_page] = 0;
-
-    char url_next_page[SIZE_OF_STRING * 2];
-    snprintf(url_next_page, sizeof(url_next_page), "%s/%s", url,
-             path_next_page);
 
     fclose(file);
+    return result;
+}
 
-    char temp_str[SIZE_OF_STRING] = "";
-    char second_temp[SIZE_OF_STRING] = "";
-    c = url;
-    while (*c != 0)
+// Find the EPITA login (firstname.name) without stopping : 1. in the urls Jarvis
+// already knows, 2. in the git email, 3. in the ssh banner of the forge
+static char *__FindForgeLogin(void)
+{
+    char *login = NULL;
+
+    // 1. Urls already registered in the info file ("login@git.forge.epita.fr:...")
+    char *info_path = GetInfoPath();
+    FILE *info_file = fopen(info_path, "r");
+    free(info_path);
+    if (info_file != NULL)
     {
-        int i = 0;
-        strcpy(second_temp, temp_str);
-        while (*c != 0 && *c != '/')
-            temp_str[i++] = *(c++);
-        temp_str[i] = 0;
-        c++;
+        char *line = NULL;
+        size_t capacity = 0;
+        while (login == NULL && getline(&line, &capacity, info_file) >= 0)
+        {
+            char *at = strstr(line, "@git.forge.epita.fr");
+            if (at == NULL)
+                continue;
+
+            char *start = at;
+            while (start > line && start[-1] != '"' && start[-1] != ' ')
+                start--;
+            if (at > start && (size_t)(at - start) < 256)
+                login = __DuplicateRange(start, (size_t)(at - start));
+        }
+        free(line);
+        fclose(info_file);
+    }
+    if (login != NULL)
+        return login;
+
+    // 2. git config user.email = firstname.name@epita.fr
+    FILE *pipe = popen("git config --get user.email 2>/dev/null", "r");
+    if (pipe != NULL)
+    {
+        char email[256];
+        if (fgets(email, sizeof(email), pipe) != NULL)
+        {
+            email[strcspn(email, "\r\n")] = '\0';
+            char *at = strchr(email, '@');
+            if (at != NULL && at != email && strcmp(at, "@epita.fr") == 0)
+                login = __DuplicateRange(email, (size_t)(at - email));
+        }
+        pclose(pipe);
+    }
+    if (login != NULL)
+        return login;
+
+    // 3. Banner "Welcome @firstname.name from <ip>" printed by the forge
+    pipe = popen("ssh -o StrictHostKeyChecking=no -o BatchMode=yes "
+                 "-o ConnectTimeout=10 -T git@git.forge.epita.fr 2>&1",
+                 "r");
+    if (pipe != NULL)
+    {
+        char line[512];
+        while (login == NULL && fgets(line, sizeof(line), pipe) != NULL)
+        {
+            char name[256];
+            if (sscanf(line, "Welcome @%255s", name) == 1)
+                login = __DuplicateRange(name, strlen(name));
+        }
+        pclose(pipe);
     }
 
-    char *new_url = malloc(SIZE_OF_STRING);
-    if (new_url == NULL)
-    {
-        free(dotjarvis_path);
+    return login;
+}
+
+// "/epita-ing/net1-2627/root" + login ->
+// "login@git.forge.epita.fr:p/epita-ing/net1-2627/epita-ing-net1-2627-login.git"
+static char *__BuildGitUrl(const char *url, const char *login)
+{
+    char copy[SIZE_OF_STRING];
+    snprintf(copy, sizeof(copy), "%s", url);
+
+    char *parts[64];
+    int count = 0;
+    for (char *token = strtok(copy, "/"); token != NULL && count < 64;
+         token = strtok(NULL, "/"))
+        parts[count++] = token;
+
+    if (count < 3 || strcmp(parts[count - 1], "root") != 0)
+        return NULL;
+
+    const char *type = parts[count - 3];
+    const char *id = parts[count - 2];
+
+    size_t size = 2 * strlen(login) + 2 * strlen(type) + 2 * strlen(id) + 64;
+    char *git_url = malloc(size);
+    if (git_url == NULL)
         err(EXIT_FAILURE, "malloc");
-    }
-    int ind = 0;
-    while (url[ind] != 0)
+    snprintf(git_url, size, "%s@git.forge.epita.fr:p/%s/%s/%s-%s-%s.git", login,
+             type, id, type, id, login);
+    return git_url;
+}
+
+// Find the git url of the repository whose root page is <url>
+// (ex : /epita-ing/net1-2627/root). Never stops the program : tries the
+// repository page, then deduces the url from the EPITA login, then asks the
+// user. Returns NULL only if nothing worked (the caller must handle it).
+char *ExtractRepo(char *url)
+{
+    char *repo_url = NULL;
+    char *dotjarvis_path = NULL;
+
+    // 1. The repository page is <root url>/<id>
+    //    (ex : /epita-ing/net1-2627/root/net1-2627)
+    if (GetDotJarvisPath(&dotjarvis_path) == EXIT_SUCCESS)
     {
-        new_url[ind] = url[ind];
-        ind++;
+        char trimmed[SIZE_OF_STRING];
+        snprintf(trimmed, sizeof(trimmed), "%s", url);
+        size_t length = strlen(trimmed);
+        while (length > 0 && trimmed[length - 1] == '/')
+            trimmed[--length] = '\0';
+
+        char *last_slash = strrchr(trimmed, '/');
+        if (last_slash != NULL && last_slash != trimmed)
+        {
+            char head[SIZE_OF_STRING];
+            snprintf(head, sizeof(head), "%.*s", (int)(last_slash - trimmed),
+                     trimmed);
+            const char *id = strrchr(head, '/');
+            id = id == NULL ? head : id + 1;
+
+            if (id[0] != '\0')
+            {
+                char page_url[SIZE_OF_STRING * 2];
+                snprintf(page_url, sizeof(page_url), "%s/%s", trimmed, id);
+
+                char file_path[SIZE_OF_STRING * 2];
+                snprintf(file_path, sizeof(file_path), "%s/RepoPage.html",
+                         dotjarvis_path);
+
+                // Never read a page left by a previous run
+                remove(file_path);
+
+                if (__SoftPageDownload(page_url, "RepoPage.html") == 0)
+                    repo_url = __FindGitUrlInPage(file_path);
+            }
+        }
     }
-    new_url[ind++] = '/';
-    int i = 0;
-    while (second_temp[i] != 0)
-        new_url[ind++] = second_temp[i++];
-    new_url[ind] = 0;
+    free(dotjarvis_path);
 
-    if (PageDownload(new_url, "RepoPage.html"))
-        errx(EXIT_FAILURE,
-             "ERROR impossible to download the repo page (check yout internet "
-             "connection)");
-    free(new_url);
-
-    snprintf(file_path, sizeof(file_path), "%s/RepoPage.html", dotjarvis_path);
-
-    FILE *file2 = fopen(file_path, "r");
-
-    if (!file2)
-    {
-        free(dotjarvis_path);
-        errx(EXIT_FAILURE, "ERROR Impossible to open the file %s", file_path);
-    }
-
-    char *ch = NULL;
-    while (ch == NULL && fgets(buffer, 2048, file2))
-    {
-        ch = strstr(buffer, "gitUrl");
-    }
-    if (ch == NULL)
-    {
-        fclose(file2);
-        free(dotjarvis_path);
-        errx(EXIT_FAILURE, "ERROR Page of the repository not found");
-    }
-
-    ch = strstr(buffer, "value");
-    ch += 7;
-
-    int ind_repo_url = 0;
-    char *repo_url = malloc(SIZE_OF_STRING);
+    // 2. Deduce it : login@git.forge.epita.fr:p/<type>/<id>/<type>-<id>-<login>.git
     if (repo_url == NULL)
     {
-        fclose(file2);
-        free(dotjarvis_path);
-        err(EXIT_FAILURE, "malloc");
-    }
-    while (*ch != '\"')
-        repo_url[ind_repo_url++] = *(ch++);
-    repo_url[ind_repo_url] = 0;
+        printf("\033[33mWARNING Git url not found on the repository page, "
+               "deducing it from the repository path.\033[0m\n");
 
-    fclose(file2);
-    free(dotjarvis_path);
+        char *login = __FindForgeLogin();
+        if (login == NULL)
+            login = __PromptLine("EPITA login (firstname.name) : ");
+
+        if (login != NULL)
+        {
+            repo_url = __BuildGitUrl(url, login);
+            free(login);
+        }
+
+        if (repo_url != NULL)
+            printf("Deduced git url : \033[1m%s\033[0m\n", repo_url);
+    }
+
+    // 3. Last resort : ask the user
+    if (repo_url == NULL)
+        repo_url = __PromptLine("Please enter the git url of the repository "
+                                "(empty to cancel) :\n> ");
 
     return repo_url;
 }
