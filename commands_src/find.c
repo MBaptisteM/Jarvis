@@ -1,11 +1,10 @@
 #include "find.h"
 
+int ReadRootPath(char **value);
+
 #include <ctype.h>
 
-// Strictly parse the course id of an EPITA url (same rule as clone.c) :
-// a path component shaped like <letters>-<3 digits>-<letter>-<2 digits>-<4
-// digits> (ex : prog-208-p-05-2029). Returns 0 on success, 1 otherwise (the
-// repository then lives in the "Others" folder).
+// Strictly parse the course id of an EPITA url (same rule as clone.c)
 static int __FindParseCourseId(const char *url, int *bimester, char *stubborn)
 {
     const char *start = url;
@@ -97,7 +96,7 @@ int main(int argc, char *argv[])
 void __FindRoot(void)
 {
     char *main_folder_path;
-    if (ReadInfo("main_path", &main_folder_path))
+    if (ReadRootPath(&main_folder_path))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
@@ -129,7 +128,7 @@ void __TrimTrailing(char *str)
 void __FindCurrent(void)
 {
     char *main_folder_path;
-    if (ReadInfo("main_path", &main_folder_path))
+    if (ReadRootPath(&main_folder_path))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
@@ -237,7 +236,7 @@ void __FindRepository(char *repo_arg)
         __TrimTrailing(repo_name);
 
         char *main_folder_path;
-        if (ReadInfo("main_path", &main_folder_path))
+        if (ReadRootPath(&main_folder_path))
             errx(EXIT_FAILURE,
                  "ERROR Impossible to find the root repository (did you clone "
                  "anything yet?)");
@@ -341,7 +340,7 @@ int __ExtractStubborn(char *url, char *stubborn_out)
 void __FindEpitaUrlInTree(char *url)
 {
     char *main_folder_path;
-    if (ReadInfo("main_path", &main_folder_path))
+    if (ReadRootPath(&main_folder_path))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
@@ -442,7 +441,7 @@ void __FindEpitaUrlInTree(char *url)
 void __FindByKeyword(char *word)
 {
     char *main_folder_path;
-    if (ReadInfo("main_path", &main_folder_path))
+    if (ReadRootPath(&main_folder_path))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
@@ -492,10 +491,7 @@ int __ContainsWord(const char *haystack, const char *word)
     return 0;
 }
 
-// Recursively walk the tree starting at "path", printing the path of every
-// folder whose name contains "word" (case-insensitive). Does not go inside
-// a matching folder (no need to search inside an already found repo), nor
-// inside ".git" folders.
+// Recursively walk the tree starting at "path", printing the path of every folder
 void __SearchTree(const char *path, const char *word, int *found_any)
 {
     DIR *dir = opendir(path);

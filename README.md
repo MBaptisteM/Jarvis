@@ -26,6 +26,7 @@
 * [Commands](#commands)
   * [Authentication Command](#authentication-command)
   * [Clone Command](#clone-command)
+  * [Erase Command](#erase-command)
   * [Uninstall Command](#uninstall-command)
 * [License](#license)
 
@@ -199,6 +200,22 @@ jarvis clone firstname.lastname@git.forge.epita.fr:p/example/repository.git
 6. Repository is renamed.
 7. GitHub archive is updated if enabled.
 
+
+
+## Erase Command
+
+Back up the root repository, delete its contents except `.git`, and push the
+cleaned repository.
+
+### Usage
+
+```bash
+jarvis erase
+```
+
+The command asks for confirmation before deleting anything. The backup push
+replaces remote-only commits. Ignored files are not included in the backup.
+If needed, the command prints the Git command to restore the backed-up files.
 
 
 ## Uninstall Command

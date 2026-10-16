@@ -38,7 +38,7 @@ static int __GetHeadHash(char *hash, size_t hash_size)
 
 static void __PrintRestoreCommand(const char *root_path, const char *hash)
 {
-    printf("\nTo restore the root repository before clear, run:\n  git -C '");
+    printf("\nTo restore the root repository before erase, run:\n  git -C '");
     for (const char *c = root_path; *c != '\0'; c++)
     {
         if (*c == '\'')
@@ -53,7 +53,7 @@ static void __PrintRestoreCommand(const char *root_path, const char *hash)
 int main(int argc, char *argv[])
 {
     if (argc > 1 && argv[1] != NULL)
-        errx(EXIT_FAILURE, "Usage: jarvis clear");
+        errx(EXIT_FAILURE, "Usage: jarvis erase");
 
     char *root_path = GetTPsPath();
     if (root_path == NULL)
@@ -78,13 +78,13 @@ int main(int argc, char *argv[])
     if (fgets(confirmation, sizeof(confirmation), stdin) == NULL
         || (confirmation[0] != 'y' && confirmation[0] != 'Y'))
     {
-        printf("Clear cancelled.\n");
+        printf("Erase cancelled.\n");
         free(root_path);
         return EXIT_SUCCESS;
     }
 
     if (AddRepoRoot() != EXIT_SUCCESS
-        || PushRepoRootForce("Backup before clear") != EXIT_SUCCESS)
+        || PushRepoRootForce("Backup before erase") != EXIT_SUCCESS)
     {
         free(root_path);
         return EXIT_FAILURE;
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
     int result = AddRepoRoot();
     if (result == EXIT_SUCCESS)
-        result = PushRepoRoot("Clear root repository");
+        result = PushRepoRoot("Erase root repository");
 
     __PrintRestoreCommand(root_path, backup_hash);
     free(root_path);

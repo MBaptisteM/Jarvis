@@ -34,9 +34,9 @@ int main(int argc, char *argv[])
         {
             HelpFind();
         }
-        else if (strcasecmp(argv[1], COMMAND_CLEAR) == 0)
+        else if (strcasecmp(argv[1], COMMAND_ERASE) == 0)
         {
-            HelpClear();
+            HelpErase();
         }
         else
         {
@@ -64,8 +64,8 @@ void Help()
 
     // find
     printf("find\t\tCommand to find specific repositories.\n");
-    // clear
-    printf("clear\t\tBack up, clean, and push the root repository.\n");
+    // erase
+    printf("erase\t\tBack up, clean, and push the root repository.\n");
 
 
     // uninstall
@@ -168,7 +168,7 @@ void HelpPull()
     printf("│\n└─\n");
 }
 
-void HelpClear()
+void HelpErase()
 {
     printf("│\n");
     printf("│  Push a backup, delete the root repository content except .git, and "
@@ -184,11 +184,11 @@ void HelpClear()
 
     printf("│\n├─ " BOLD "USAGE\n" RESET);
     printf("│\n");
-    printf("│  %s\n", COMMAND_CLEAR);
+    printf("│  %s\n", COMMAND_ERASE);
 
     printf("│\n├─ " BOLD "EXAMPLE\n" RESET);
     printf("│\n");
-    printf("│  jarvis %s\n", COMMAND_CLEAR);
+    printf("│  jarvis %s\n", COMMAND_ERASE);
     printf("│\n└─\n");
 }
 

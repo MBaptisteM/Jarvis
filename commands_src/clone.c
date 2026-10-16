@@ -2,6 +2,8 @@
 
 #include "clone_root.h"
 
+int ReadRootPath(char **value);
+
 #include <ctype.h>
 
 #define OTHERS_FOLDER_NAME "Others"
@@ -612,7 +614,7 @@ int __RenameRepo(char *repo_path, char *repo_name)
 
     /// ----- TODO REANEME NE FONCTIONNE PAS
     char *root_folder;
-    if (ReadInfo("main_path", &root_folder))
+    if (ReadRootPath(&root_folder))
         errx(EXIT_FAILURE, "ERROR Impossible to find the root repo");
 
     size_t root_len = strlen(root_folder);

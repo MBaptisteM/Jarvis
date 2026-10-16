@@ -65,6 +65,109 @@ char *GetInfoPath()
     return info_file_full_path;
 }
 
+#ifndef REPO_NAME
+#define REPO_NAME "EPITA-TPs"
+#endif
+
+char *FindFileBFS(const char *file_to_find);
+
+// Is there a .git inside this folder ?
+static int __HasGitFolder(const char *path)
+{
+    size_t size = strlen(path) + sizeof("/.git");
+    char *git_path = malloc(size);
+    if (git_path == NULL)
+        return 0;
+
+    snprintf(git_path, size, "%s/.git", path);
+    int result = access(git_path, F_OK) == 0;
+    free(git_path);
+    return result;
+}
+
+// Search the root repository (REPO_NAME) in the arborescence, starting from
+// $HOME, and register it in the info file. Returns its path with a trailing
+// '/', or NULL if it can't be found anywhere.
+static char *__SearchRootRepo(void)
+{
+    char *parent = FindFileBFS(REPO_NAME);
+    if (parent == NULL)
+        return NULL;
+
+    size_t size = strlen(parent) + strlen(REPO_NAME) + 3;
+    char *root = malloc(size);
+    if (root == NULL)
+    {
+        free(parent);
+        err(EXIT_FAILURE, "malloc");
+    }
+    snprintf(root, size, "%s/%s/", parent, REPO_NAME);
+    free(parent);
+
+    if (!__HasGitFolder(root))
+    {
+        free(root);
+        return NULL;
+    }
+
+    WriteInfo(NAME_PATH_INFO_FILE, root);
+    if (strcmp(NAME_PATH_INFO_FILE, "main_path") != 0)
+        WriteInfo("main_path", root);
+
+    return root;
+}
+
+// Same contract as ReadInfo("main_path", value) (0 : found | 1 : not found),
+// but when the saved root repository is missing or no longer valid, it is
+// searched again in the arborescence and the info file is updated.
+int ReadRootPath(char **value)
+{
+    *value = NULL;
+
+    char *stored = NULL;
+    if (ReadInfo("main_path", &stored) == EXIT_SUCCESS && stored != NULL)
+    {
+        int valid = __HasGitFolder(stored);
+
+        // The saved path may be the parent of the root repository
+        if (!valid)
+        {
+            size_t size = strlen(stored) + strlen(REPO_NAME) + 2;
+            char *nested = malloc(size);
+            if (nested == NULL)
+                err(EXIT_FAILURE, "malloc");
+            snprintf(nested, size, "%s/%s", stored, REPO_NAME);
+            valid = __HasGitFolder(nested);
+            free(nested);
+        }
+
+        if (valid)
+        {
+            *value = stored;
+            return EXIT_SUCCESS;
+        }
+    }
+
+    // Not saved, or the saved path is gone : search it again
+    char *found = __SearchRootRepo();
+    if (found != NULL)
+    {
+        free(stored);
+        *value = found;
+        return EXIT_SUCCESS;
+    }
+
+    // Not a git repository yet (e.g. folder just created) but it exists
+    if (stored != NULL && access(stored, F_OK) == 0)
+    {
+        *value = stored;
+        return EXIT_SUCCESS;
+    }
+
+    free(stored);
+    return EXIT_FAILURE;
+}
+
 // Get path of the main folder TPs (root folder) | NULL if not found
 char *GetTPsPath()
 {
@@ -77,10 +180,22 @@ char *GetTPsPath()
         free(TPs_path);
     }
 
-    TPs_path = FindMarkedFileBFS();
-    if (TPs_path == NULL)
+    // Saved path missing or gone : search the root repository again
+    TPs_path = __SearchRootRepo();
+    if (TPs_path != NULL)
         return TPs_path;
 
+    char *marked_path = FindMarkedFileBFS();
+    if (marked_path == NULL)
+        return NULL;
+
+    size_t marked_size = strlen(marked_path) + 2;
+    TPs_path = realloc(marked_path, marked_size);
+    if (TPs_path == NULL)
+    {
+        free(marked_path);
+        err(EXIT_FAILURE, "realloc");
+    }
     strcat(TPs_path, "/");
     WriteInfo(NAME_PATH_INFO_FILE, TPs_path);
 

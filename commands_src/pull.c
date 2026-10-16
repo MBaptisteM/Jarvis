@@ -1,5 +1,7 @@
 #include "pull.h"
 
+int ReadRootPath(char **value);
+
 int main(int argc, char *argv[])
 {
     // Case main (or no argument): pull the root folder and every submodule
@@ -105,7 +107,7 @@ static void __HealSubmodules(const char *repo_path)
 void __PullMain(void)
 {
     char *root_folder;
-    if (ReadInfo("main_path", &root_folder))
+    if (ReadRootPath(&root_folder))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
@@ -141,7 +143,7 @@ void __PullCurrent(void)
 
     char *root_folder = NULL;
     int current_was_root = 0;
-    if (ReadInfo("main_path", &root_folder) == 0)
+    if (ReadRootPath(&root_folder) == 0)
     {
         current_was_root = strcmp(path, root_folder) == 0;
         root_folder = __FindRootRepository(root_folder);
@@ -262,7 +264,7 @@ void __PullRepository(char *repo_arg)
 
     // Get the root repository path to rebuild the full path, like clone.c does
     char *main_folder_path;
-    if (ReadInfo("main_path", &main_folder_path))
+    if (ReadRootPath(&main_folder_path))
         errx(EXIT_FAILURE,
              "ERROR Impossible to find the root repository (did you clone "
              "anything yet?)");
