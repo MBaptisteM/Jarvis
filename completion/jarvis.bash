@@ -18,4 +18,4 @@ _jarvis_completions() {
     COMPREPLY=( $(compgen -W "${commands}" -- "$cur") )
 }
 
-complete -F _jarvis_completions jarvis
+complete -F _jarvis_completions jarvis j

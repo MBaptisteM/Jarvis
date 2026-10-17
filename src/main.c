@@ -1,5 +1,19 @@
 #include "main.h"
 
+static char *ResolveShortcut(char *command)
+{
+    static char *shortcuts[][2] = {
+        { "a", "auth" }, { "c", "clone" }, { "pl", "pull" }, { "ps", "push" },
+        { "f", "find" }, { "g", "go" },    { "h", "help" },
+    };
+
+    for (size_t i = 0; i < sizeof(shortcuts) / sizeof(shortcuts[0]); i++)
+        if (strcasecmp(command, shortcuts[i][0]) == 0)
+            return shortcuts[i][1];
+
+    return command;
+}
+
 // Main function that choose which command should be executed
 int main(int argc, char *argv[])
 {
@@ -24,6 +38,9 @@ int main(int argc, char *argv[])
     // A command has been entered case : call the command if it is possible
     else
     {
+        // "c" -> "clone", "g" -> "go", ...
+        argv[1] = ResolveShortcut(argv[1]);
+
         if (argc > 2)
         {
             if (strcasecmp(argv[2], "--help") == 0
@@ -55,6 +72,6 @@ int main(int argc, char *argv[])
         execv(command_path, &argv[1]);
     }
 
-    // Error case, impossible to call any command
+    // Error case, impossible to call
     errx(EXIT_FAILURE, "ERROR unknown error, command impossible to execute");
 }

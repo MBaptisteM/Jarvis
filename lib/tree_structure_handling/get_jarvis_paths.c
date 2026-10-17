@@ -168,6 +168,90 @@ int ReadRootPath(char **value)
     return EXIT_FAILURE;
 }
 
+
+// Default folder prefix of a layer ("year", "semester" or "bimester")
+const char *GetDefaultLayerPrefix(const char *layer)
+{
+    if (strcmp(layer, "year") == 0)
+        return "Y";
+    if (strcmp(layer, "semester") == 0)
+#ifdef SEMESTER
+        return SEMESTER;
+#else
+        return "S";
+#endif
+#ifdef BIMESTER
+    return BIMESTER;
+#else
+    return "B";
+#endif
+}
+
+// Is this layer used to classify the repositories ?
+int IsLayerEnabled(const char *layer)
+{
+    int enabled = strcmp(layer, "year") != 0;
+
+    char key[64];
+    snprintf(key, sizeof(key), "layer_%s", layer);
+
+    char *value = NULL;
+    if (ReadInfo(key, &value) == EXIT_SUCCESS && value != NULL)
+        enabled = strcmp(value, "on") == 0;
+    free(value);
+
+    return enabled;
+}
+
+// Folder prefix of a layer (malloc'd, the caller must free it)
+char *GetLayerPrefix(const char *layer)
+{
+    char key[64];
+    snprintf(key, sizeof(key), "prefix_%s", layer);
+
+    char *value = NULL;
+    if (ReadInfo(key, &value) != EXIT_SUCCESS || value == NULL
+        || value[0] == '\0')
+    {
+        free(value);
+        value = strdup(GetDefaultLayerPrefix(layer));
+        if (value == NULL)
+            err(EXIT_FAILURE, "strdup");
+    }
+
+    return value;
+}
+
+// Folder names (malloc'd, outermost first) of the enabled layers for a
+// bimester number : ex : { "Y2", "S4", "B8" }. Returns how many there are
+// (0 to 3, 0 means the repositories go directly in the root repository).
+size_t GetLayerFolders(int bimester, char **folders)
+{
+    int semester = bimester / 2 + bimester % 2;
+    int year = semester / 2 + semester % 2;
+
+    const char *layers[3] = { "year", "semester", "bimester" };
+    int numbers[3] = { year, semester, bimester };
+
+    size_t count = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        if (!IsLayerEnabled(layers[i]))
+            continue;
+
+        char *prefix = GetLayerPrefix(layers[i]);
+        size_t size = strlen(prefix) + 16;
+        folders[count] = malloc(size);
+        if (folders[count] == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(folders[count], size, "%s%d", prefix, numbers[i]);
+        free(prefix);
+        count++;
+    }
+
+    return count;
+}
+
 // Get path of the main folder TPs (root folder) | NULL if not found
 char *GetTPsPath()
 {
@@ -190,13 +274,14 @@ char *GetTPsPath()
         return NULL;
 
     size_t marked_size = strlen(marked_path) + 2;
-    TPs_path = realloc(marked_path, marked_size);
+    TPs_path = malloc(marked_size);
     if (TPs_path == NULL)
     {
         free(marked_path);
-        err(EXIT_FAILURE, "realloc");
+        err(EXIT_FAILURE, "malloc");
     }
-    strcat(TPs_path, "/");
+    snprintf(TPs_path, marked_size, "%s/", marked_path);
+    free(marked_path);
     WriteInfo(NAME_PATH_INFO_FILE, TPs_path);
 
     return TPs_path;

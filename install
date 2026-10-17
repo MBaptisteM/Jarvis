@@ -91,3 +91,35 @@ fi
 
 echo "Added ~/.local/bin to PATH automatically in $startup_file."
 echo "The change will take effect in new shells."
+
+
+J_PATH="$BIN_PATH/j"
+create_shortcut=0
+if [ -f "$J_PATH" ] && grep -q '^# Jarvis shortcut' "$J_PATH"; then
+    create_shortcut=1
+elif command -v j >/dev/null 2>&1; then
+    echo "A command named 'j' already exists: the shortcut 'j' was not created."
+elif grep -Eq '^[[:space:]]*(alias j=|alias j |function j([[:space:]]|\(|$)|j[[:space:]]*\(\))' "$startup_file"; then
+    echo "'j' is already defined in $startup_file: the shortcut 'j' was not created."
+else
+    create_shortcut=1
+fi
+
+if [ "$create_shortcut" -eq 1 ]; then
+    printf '#!/bin/sh\n# Jarvis shortcut\nexec jarvis "$@"\n' > "$J_PATH"
+    chmod +x "$J_PATH"
+    echo "Shortcut created: j = jarvis (ex: j c, j g, j pl)"
+
+    # Autocompletion of "j" : same completion as "jarvis"
+    cat > "$COMP_PATH/j" <<'COMPLETION_EOF'
+# Jarvis shortcut : "j" is completed like "jarvis"
+if [ -r "$HOME/.local/share/bash-completion/completions/jarvis" ]; then
+    . "$HOME/.local/share/bash-completion/completions/jarvis"
+fi
+_jarvis_completion_function=$(complete -p jarvis 2>/dev/null | sed -n 's/.* -F \([^ ]*\).*/\1/p')
+if [ -n "$_jarvis_completion_function" ]; then
+    complete -F "$_jarvis_completion_function" j
+fi
+unset _jarvis_completion_function
+COMPLETION_EOF
+fi

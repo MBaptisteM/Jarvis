@@ -1,6 +1,7 @@
 #include "find.h"
 
 int ReadRootPath(char **value);
+size_t GetLayerFolders(int bimester, char **folders);
 
 #include <ctype.h>
 
@@ -55,6 +56,34 @@ static int __FindParseCourseId(const char *url, int *bimester, char *stubborn)
     }
 
     return 1;
+}
+
+// Relative folder (from the root repository) where the repository of this url
+// is cloned, according to the layers chosen with "jarvis custom"
+static int __RelativeFolder(const char *url, char *out, size_t size)
+{
+    out[0] = '\0';
+
+    int num_bimester;
+    if (__FindParseCourseId(url, &num_bimester, NULL) != 0)
+    {
+        snprintf(out, size, "%s", "Others");
+        return 1;
+    }
+
+    char *folders[3];
+    size_t count = GetLayerFolders(num_bimester, folders);
+    size_t used = 0;
+    for (size_t i = 0; i < count; i++)
+    {
+        int written = snprintf(out + used, size - used, "%s%s", i > 0 ? "/" : "",
+                               folders[i]);
+        if (written > 0 && (size_t)written < size - used)
+            used += (size_t)written;
+        free(folders[i]);
+    }
+
+    return 0;
 }
 
 // Join a parent folder (as returned by FindFileBFS) and a folder name
@@ -347,18 +376,18 @@ void __FindEpitaUrlInTree(char *url)
 
     __TrimTrailing(main_folder_path);
 
-    char semester[SIZE_OF_STRING];
-    char bimester[SIZE_OF_STRING];
-    __ExtractRelativePath(url, semester, bimester);
+    char relative_folder[SIZE_OF_STRING];
+    int is_others = __RelativeFolder(url, relative_folder, sizeof(relative_folder));
 
     char stubborn[SIZE_OF_STRING];
     int stubborn_failed = __ExtractStubborn(url, stubborn);
 
-    size_t size_target_path =
-        strlen(main_folder_path) + strlen(semester) + strlen(bimester) + 3;
+    size_t root_len = strlen(main_folder_path);
+    int need_slash = root_len > 0 && main_folder_path[root_len - 1] != '/';
+    size_t size_target_path = root_len + strlen(relative_folder) + 3;
     char target_path[size_target_path];
-    snprintf(target_path, size_target_path, "%s%s/%s", main_folder_path,
-             semester, bimester);
+    snprintf(target_path, size_target_path, "%s%s%s", main_folder_path,
+             need_slash ? "/" : "", relative_folder);
 
     free(main_folder_path);
 
@@ -408,7 +437,7 @@ void __FindEpitaUrlInTree(char *url)
     }
 
     // "Others" : the folder keeps the name of the git repository
-    if (bimester[0] == '\0')
+    if (is_others)
     {
         const char *last = strrchr(url, '/');
         last = last == NULL ? url : last + 1;

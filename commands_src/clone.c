@@ -3,6 +3,7 @@
 #include "clone_root.h"
 
 int ReadRootPath(char **value);
+size_t GetLayerFolders(int bimester, char **folders);
 
 #include <ctype.h>
 
@@ -707,28 +708,9 @@ char **__GetRelavitvePath(char *repo_name, size_t *size)
         }
         return relative_path;
     }
-    int num_semester = num_bimester / 2 + num_bimester % 2;
+    // Layers chosen with "jarvis custom" (Year / Semester / Bimester), maybe none
+    (*size) = GetLayerFolders(num_bimester, relative_path);
 
-    (*size)++;
-    relative_path[0] = malloc(SIZE_OF_STRING);
-    if (relative_path[0] == NULL)
-    {
-        free(relative_path);
-        err(EXIT_FAILURE, "malloc");
-    }
-    snprintf(relative_path[0], SIZE_OF_STRING, "%s%d", SEMESTER, num_semester);
-
-    (*size)++;
-    relative_path[1] = malloc(SIZE_OF_STRING);
-    if (relative_path[1] == NULL)
-    {
-        free(relative_path[0]);
-        free(relative_path);
-        err(EXIT_FAILURE, "malloc");
-    }
-    snprintf(relative_path[1], SIZE_OF_STRING, "%s%d", BIMESTER, num_bimester);
-
-    (void)size;
     return relative_path;
 }
 

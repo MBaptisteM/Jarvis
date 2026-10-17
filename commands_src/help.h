@@ -17,10 +17,12 @@
 #define COMMAND_FIND "find"
 #define COMMAND_ERASE "erase"
 
-void Help();
-void HelpClone();
-void HelpUninstall();
-void HelpAuth();
-void HelpPull();
-void HelpFind();
-void HelpErase();
+void Help(void);
+void HelpClone(void);
+void HelpUninstall(void);
+void HelpAuth(void);
+void HelpPull(void);
+void HelpFind(void);
+void HelpErase(void);
+void HelpGo(void);
+void HelpCustom(void);
