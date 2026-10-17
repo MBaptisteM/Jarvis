@@ -22,12 +22,21 @@
   * [Enhanced Clone](#enhanced-clone)
   * [Automatic Tree Structure Organization](#automatic-tree-structure-organization)
   * [GitHub Integration](#github-integration)
+  * [Sync & Locate](#sync--locate)
+  * [Customizable Organization](#customizable-organization)
 * [Installation](#installation)
 * [Commands](#commands)
   * [Authentication Command](#authentication-command)
   * [Clone Command](#clone-command)
+  * [Pull Command](#pull-command)
+  * [Push Command](#push-command)
+  * [Find Command](#find-command)
+  * [Go Command](#go-command)
+  * [Custom Command](#custom-command)
   * [Erase Command](#erase-command)
+  * [Help Command](#help-command)
   * [Uninstall Command](#uninstall-command)
+  * [Shortcuts](#shortcuts)
 * [License](#license)
 
 ---
@@ -60,6 +69,7 @@ Features:
 * Session persistence.
 * Cookie storage for future executions.
 * Automatic reuse of saved sessions.
+* Automatically locates or clones your root repository if needed.
 
 
 
@@ -87,6 +97,7 @@ Jarvis maintains a structured workspace.
 
 Repositories are automatically classified according to:
 
+* Year (optional, see [Customizable Organization](#customizable-organization))
 * Semester
 * Bimester
 * Main concepts covered
@@ -106,10 +117,16 @@ EPITA-TPs/
 │       ├── E1-Name-concept1-concept2/
 │       └── P1-Name-concept1-concept2/
 │
-└── S2/
-    └── B1/
-        └── E1-Name-concept1-concept2/
+├── S2/
+│   └── B1/
+│       └── E1-Name-concept1-concept2/
+│
+└── Others/
+    └── repository-whose-course-cannot-be-deduced/
 ```
+
+With the Year layer enabled, the same repositories go one level deeper
+(`EPITA-TPs/Y1/S1/B2/...`).
 
 
 
@@ -125,6 +142,29 @@ When enabled:
 * Your entire academic history is backed up.
 
 This repository allows you to have a Long-term archival and reuse your code whenever you want.
+
+
+
+## Sync & Locate
+
+Keep every repository up to date and find any of them instantly.
+
+* Pull one repository, or everything at once.
+* Submodules are initialized and pulled recursively.
+* A submodule whose pinned commit is no longer reachable is automatically resynced with its remote.
+* Locate a repository by its title, its git remote, or by keyword.
+* Jump straight into a repository with `jarvis go`.
+
+
+
+## Customizable Organization
+
+Choose how your workspace is laid out with `jarvis custom`.
+
+* Enable or disable the Year, Semester and Bimester layers.
+* Choose the prefix written before each number (`S`, `Semester`, ...).
+* Existing repositories are moved to their new location when you leave the menu.
+* The root repository can be pushed right away.
 
 ---
 
@@ -154,6 +194,9 @@ systems, Jarvis continues to install Chromium through Playwright.
 
 # Commands
 
+Type `jarvis help` to list the commands, or `jarvis help <command>` for the
+usage and examples of one of them.
+
 ## Authentication Command
 
 Authenticate with your EPITA account.
@@ -170,6 +213,7 @@ jarvis auth
 2. You authenticate on EPITA Forge.
 3. Jarvis stores the session.
 4. Future executions reuse the saved session.
+5. Your root repository is located (or cloned if it doesn't exist yet).
 
 
 
@@ -180,8 +224,12 @@ Clone and organize a repository.
 ### Usage
 
 ```bash
-jarvis clone <remote-repository>
+jarvis clone [all | current | <remote-repository>]
 ```
+
+* No argument, or `all`: finds your root repository, or clones it if it doesn't exist yet.
+* `current`: lists your Forge projects so you can pick the one to clone.
+* `<remote-repository>`: clones the specified repository.
 
 ### Example
 
@@ -194,11 +242,138 @@ jarvis clone firstname.lastname@git.forge.epita.fr:p/example/repository.git
 (If it is an epita repository)
 1. Repository is cloned.
 2. Repository is placed in the correct workspace location.
-3. Tree structure 
-4. Given files and Suubject are downloaded.
+3. Tree structure is generated.
+4. Given files and Subject are downloaded.
 5. Project structure is generated.
 6. Repository is renamed.
 7. GitHub archive is updated if enabled.
+
+
+
+## Pull Command
+
+Pull and update repositories, submodules included.
+
+### Usage
+
+```bash
+jarvis pull [all | current | <repository>]
+```
+
+* No argument, or `all`: pulls the root repository and every repository of the tree.
+* `current`: pulls the repository currently marked as active.
+* `<repository>`: pulls this repository directly if it has already been cloned.
+
+Submodules are initialized, checked out and pulled recursively. A submodule
+whose pinned commit is no longer reachable is automatically resynced with its
+remote's default branch.
+
+### Example
+
+```bash
+jarvis pull
+jarvis pull current
+```
+
+
+
+## Push Command
+
+Commit and push a repository together with the root repository.
+
+### Usage
+
+```bash
+jarvis push [root | current | <path>]
+```
+
+* No argument: pushes the repository of the current folder.
+* `current`: pushes the repository currently marked as active.
+* `root`: pushes only the root repository.
+* `<path>`: pushes the repository located at this path.
+
+Changes are added and committed with an automatic, numbered name unless you
+give one. The root repository is updated and pushed at the same time.
+
+### Example
+
+```bash
+jarvis push
+jarvis push root
+```
+
+
+
+## Find Command
+
+Locate the local path of a repository without touching it.
+
+### Usage
+
+```bash
+jarvis find [root | current | <repository> | <keyword>]
+```
+
+* No argument, or `root`: prints the path of the root repository.
+* `current`: prints the path of the currently active repository.
+* A known git remote: prints its local path, re-locating it automatically if it moved.
+* Any other word: searches every repository title under the root repository and prints the matching paths.
+
+### Example
+
+```bash
+jarvis find current
+jarvis find "trees"
+```
+
+
+
+## Go Command
+
+Move into a repository. It works like `find`, but takes you there.
+
+### Usage
+
+```bash
+jarvis go [root | current | <repository> | <keyword>]
+```
+
+If several folders match, a menu lets you choose one. Your shell is opened in
+the chosen folder: type `exit` to come back.
+
+### Example
+
+```bash
+jarvis go current
+jarvis go "trees"
+```
+
+
+
+## Custom Command
+
+Customize the tree structure of your repositories.
+
+### Usage
+
+```bash
+jarvis custom
+```
+
+Everything is chosen with the arrows and enter:
+
+* **Layers**: enable or disable the Year, Semester and Bimester folders (default: Semester and Bimester).
+* **Prefixes**: choose the text written before each number (default: `Y`, `S`, `B`).
+* **Reset**: go back to the default organization.
+* **Save**: applies the changes to your existing repositories (they are moved) and pushes the root repository.
+* **Quit**: applies the changes to your existing repositories, without pushing.
+
+Repositories in the `Others` folder are never moved.
+
+### Example
+
+With the Year layer enabled, `EPITA-TPs/S1/B2/<repository>` becomes
+`EPITA-TPs/Y1/S1/B2/<repository>`.
 
 
 
@@ -218,6 +393,21 @@ replaces remote-only commits. Ignored files are not included in the backup.
 If needed, the command prints the Git command to restore the backed-up files.
 
 
+
+## Help Command
+
+List the commands, or show the usage of one of them.
+
+### Usage
+
+```bash
+jarvis help [command]
+```
+
+`jarvis <command> --help` works too.
+
+
+
 ## Uninstall Command
 
 Remove Jarvis from the system.
@@ -233,6 +423,25 @@ jarvis uninstall
 ```text
 Are you sure you want to uninstall Jarvis? [y/N]
 ```
+
+
+
+## Shortcuts
+
+| Command     | Shortcut |
+|-------------|----------|
+| `auth`      | `a`      |
+| `clone`     | `c`      |
+| `pull`      | `pl`     |
+| `push`      | `ps`     |
+| `find`      | `f`      |
+| `go`        | `g`      |
+| `help`      | `h`      |
+
+`erase`, `custom` and `uninstall` have no shortcut (`erase` and `uninstall` are
+destructive on purpose).
+
+`j` also works instead of `jarvis` (ex: `j c`, `j g`, `j pl`).
 
 ---
 
