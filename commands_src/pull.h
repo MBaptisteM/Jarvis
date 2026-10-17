@@ -10,6 +10,7 @@
 
 #include "TPs_handler.h"
 #include "info_file.h"
+#include "ui.h"
 
 int main(int argc, char *argv[]);
 void __PullRepo(char *repo_path);

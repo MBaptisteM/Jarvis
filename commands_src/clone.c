@@ -85,8 +85,8 @@ int main(int argc, char *argv[])
         current_repo_url = GetCurrentRepo();
         if (current_repo_url == NULL)
         {
-            printf("\033[1;31mWARNING No git url available for this "
-                   "repository, nothing was cloned.\033[0m\n");
+            UiError("No git url available for this repository, nothing was "
+                    "cloned.");
             return EXIT_FAILURE;
         }
         argv[1] = current_repo_url;
@@ -94,9 +94,8 @@ int main(int argc, char *argv[])
 
     if (!__IsEpitaRepo(argv[1]))
     {
-        printf("\033[1;31mWARNING This string is not an epita "
-               "repository.\033[0m\n");
-        printf("\033[1m-> Classic clone\033[0m\n\n");
+        UiWarning("This string is not an epita repository.\n"
+                  "Classic clone.");
 
         size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
@@ -174,7 +173,7 @@ int main(int argc, char *argv[])
         if (__OneLayerFindOrCreate(main_folder_path, relative_path[i], 1))
         {
             errx(EXIT_FAILURE,
-                 "ERROR Impossible to find or create te folder : %s%s",
+                 "ERROR Impossible to find or create the folder : %s%s",
                  main_folder_path, relative_path[i]);
         }
 
@@ -234,8 +233,7 @@ int main(int argc, char *argv[])
 
             __PrintPages(local_url_repo);
 
-            printf(
-                "\n\033[1;31mWARNING This repository already exists.\033[0m\n");
+            UiWarning("This repository already exists.");
         }
 
         size_t i = 0;
@@ -305,8 +303,7 @@ int main(int argc, char *argv[])
                 WriteInfo(argv[1], repo_name);
 
                 repo_exists_or_filled = 1;
-                printf("\n\033[1;31mWARNING This repository already "
-                       "exists.\033[0m\n");
+                UiWarning("This repository already exists.");
             }
             else
                 errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");
@@ -318,8 +315,7 @@ int main(int argc, char *argv[])
 
             if (repo_exists_or_filled)
             {
-                printf("\n\033[1;31mWARNING This repository is not "
-                       "empty.\033[0m\n");
+                UiWarning("This repository is not empty.");
             }
         }
     }
@@ -327,7 +323,7 @@ int main(int argc, char *argv[])
     // Make a choice if the repo is already filled
     if (repo_exists_or_filled)
     {
-        printf("\033[1mWhat should be done ?\033[0m\n\n");
+        UiQuestion("What should be done ?");
 
         const char *choices[] = {
             "Add the tree structure missing files/folders.",
@@ -351,7 +347,7 @@ int main(int argc, char *argv[])
                 if (waitpid(pid_get_subjects, &subject_status, 0) >= 0
                     && WIFEXITED(subject_status)
                     && WEXITSTATUS(subject_status) == EXIT_SUCCESS)
-                    printf("\033[32mSubject downloaded.\033[0m\n");
+                    UiSuccess("Subject downloaded.");
             }
             else
             {
@@ -460,10 +456,9 @@ int main(int argc, char *argv[])
 
 void __PrintPages(const char *local_url_repo)
 {
-    printf("\n\033[1;32mRepo page :\033[0m\n\033[1m%s%s\033[0m\n\n", URL,
-           local_url_repo);
-    printf("\033[1;32mSubject page :\033[0m\n\033[1m%s%s%s\033[0m\n\n", URL,
-           local_url_repo, SUBJECT);
+    UiPanel(stdout, UI_INFO, "Pages",
+            "Repo page :\n%s%s\n\nSubject page :\n%s%s%s", URL, local_url_repo,
+            URL, local_url_repo, SUBJECT);
 }
 
 int __SameStr(char *s1, char *s2)
@@ -492,9 +487,9 @@ int __RenameRepo(char *repo_path, char *repo_name)
     {
         char *fallback = strrchr(repo_path, '/');
         fallback = fallback == NULL ? repo_path : fallback + 1;
-        printf("\033[33mWARNING Impossible to deduce the course of this "
-               "repository; keeping the name %s.\033[0m\n",
-               fallback);
+        UiWarning("Impossible to deduce the course of this repository; "
+                  "keeping the name %s.",
+                  fallback);
         WriteInfo(repo_name, fallback);
         return EXIT_FAILURE;
     }
@@ -540,8 +535,7 @@ int __RenameRepo(char *repo_path, char *repo_name)
 
     if (raw_name == NULL)
     {
-        printf("\033[31mWARNING The repository doesn't have a valid tree "
-               "structure.\033[0m\n");
+        UiWarning("The repository doesn't have a valid tree structure.");
         WriteInfo(repo_name, repo_name);
         return EXIT_FAILURE;
     }
@@ -586,9 +580,9 @@ int __RenameRepo(char *repo_path, char *repo_name)
     {
         char *fallback_name = strrchr(repo_path, '/');
         fallback_name = fallback_name == NULL ? repo_path : fallback_name + 1;
-        printf("\033[33mWARNING Subject unavailable or invalid; keeping "
-               "repository name %s.\033[0m\n",
-               fallback_name);
+        UiWarning("Subject unavailable or invalid; keeping repository name "
+                  "%s.",
+                  fallback_name);
         WriteInfo(repo_name, fallback_name);
         return EXIT_SUCCESS;
     }
@@ -607,7 +601,7 @@ int __RenameRepo(char *repo_path, char *repo_name)
 
     char *path;
     if ((path = getcwd(NULL, 0)) == NULL)
-        errx(EXIT_FAILURE, "ERROR Imossible to get the current repository");
+        errx(EXIT_FAILURE, "ERROR Impossible to get the current repository");
 
     // // Execute rename
     // if (system(rename_command))
@@ -653,8 +647,6 @@ int __RenameRepo(char *repo_path, char *repo_name)
              "(git submodule absorbgitdirs -- \"%s\" || true)",
              root_folder, rel_repo_path, final_dest, rel_repo_path, final_dest,
              final_dest);
-
-    printf("COMMAND : %s\n", rename_command);
 
     if (system(rename_command))
         errx(EXIT_FAILURE, "ERROR Impossible to rename the git repo folder");

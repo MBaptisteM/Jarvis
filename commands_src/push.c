@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
         {
             if (ReadInfo("current", &path))
                 errx(EXIT_FAILURE,
-                     "ERRO trying to push the current repository but no "
+                     "ERROR trying to push the current repository but no "
                      "current repository found");
             current_folder = 1;
         }

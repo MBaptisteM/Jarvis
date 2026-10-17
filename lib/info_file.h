@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 #include "get_jarvis_paths.h"
+#include "ui.h"
 
 #define NAME_PATH_INFO_FILE "main_path"
 

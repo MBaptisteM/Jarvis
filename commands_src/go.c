@@ -308,7 +308,7 @@ static const char *__ChooseOne(const char *root)
         options[i] = display;
     }
 
-    fprintf(stderr, "\033[1mWhere do you want to go ?\033[0m\n\n");
+    UiPanel(stderr, UI_INFO, "Go", "Where do you want to go ?");
 
     fflush(stdout);
     int saved_stdout = dup(STDOUT_FILENO);
@@ -359,15 +359,18 @@ int main(int argc, char *argv[])
     if (!IsDirectory(target))
         errx(EXIT_FAILURE, "ERROR %s is not a folder.", target);
 
-    // Called directly from a terminal : move the user into the folder by
-    // opening his shell there (a program can't change the directory of the
-    // shell that launched it, so this is the only way without any setup).
-    // Typing "exit" brings him back where he was.
     if (isatty(STDOUT_FILENO))
     {
         char *destination = strdup(target);
         if (destination == NULL)
             err(EXIT_FAILURE, "strdup");
+
+        char *previous_directory = getcwd(NULL, 0);
+        if (previous_directory == NULL)
+            err(EXIT_FAILURE, "getcwd");
+        if (setenv("OLDPWD", previous_directory, 1) != 0)
+            err(EXIT_FAILURE, "setenv(OLDPWD)");
+        free(previous_directory);
 
         if (chdir(destination) != 0)
             err(EXIT_FAILURE, "chdir(%s)", destination);
@@ -376,10 +379,8 @@ int main(int argc, char *argv[])
         if (shell == NULL || shell[0] == '\0')
             shell = "/bin/sh";
 
-        fprintf(stderr,
-                "\033[1;32mYou are now in :\033[0m \033[1m%s\033[0m\n"
-                "(type exit to come back)\n",
-                destination);
+        UiPanel(stderr, UI_SUCCESS, "Jarvis",
+                "You are now in:\n%s\n(type exit to come back)", destination);
 
         execl(shell, shell, (char *)NULL);
         err(EXIT_FAILURE, "execl(%s)", shell);

@@ -9,6 +9,7 @@
 
 #include "choice.h"
 #include "get_documents.h"
+#include "ui.h"
 
 void *ThreadExtractPages(void *arg);
 void *ThreadExtractURL(void *arg);

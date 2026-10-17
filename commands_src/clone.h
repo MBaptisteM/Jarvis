@@ -19,6 +19,7 @@
 #include "info_file.h"
 #include "subject_handling.h"
 #include "tree_structure.h"
+#include "ui.h"
 
 #define SEMESTER "S"
 #define BIMESTER "B"

@@ -2,7 +2,57 @@
 
 set -euo pipefail
 
-echo "Uninstalling Jarvis..."
+ui_panel() {
+    local kind=$1
+    local title=$2
+    shift 2
+
+    local border_color=""
+    local title_color=""
+    local reset=""
+    if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+        reset=$'\033[0m'
+        case "$kind" in
+            success) border_color=$'\033[32m'; title_color=$'\033[1;32m' ;;
+            question) border_color=$'\033[90m'; title_color=$'\033[1m' ;;
+            *) border_color=$'\033[90m'; title_color=$'\033[1m' ;;
+        esac
+    fi
+
+    local width=${#title}
+    local line
+    local i
+    for line in "$@"; do
+        if (( ${#line} > width )); then
+            width=${#line}
+        fi
+    done
+    (( width += 2 ))
+
+    printf '%s╭─ %s%s%s ' "$border_color" "$title_color" "$title" "$reset"
+    local dashes=$(( width - ${#title} - 3 ))
+    if (( dashes < 1 )); then
+        dashes=1
+    fi
+    printf '%s' "$border_color"
+    for ((i = 0; i < dashes; i++)); do
+        printf '─'
+    done
+    printf '╮%s\n' "$reset"
+
+    for line in "$@"; do
+        printf '%s│%s %s%*s %s│%s\n' "$border_color" "$reset" "$line" \
+            "$(( width - ${#line} - 2 ))" '' "$border_color" "$reset"
+    done
+
+    printf '%s╰' "$border_color"
+    for ((i = 0; i < width; i++)); do
+        printf '─'
+    done
+    printf '╯%s\n' "$reset"
+}
+
+ui_panel info "Uninstalling" "Uninstalling Jarvis..."
 
 
 BIN_PATH="$HOME/.local/bin/jarvis"
@@ -15,24 +65,24 @@ else
 fi
 
 
-echo ""
-echo "This action will remove:"
-echo "  - $BIN_PATH"
-echo "  - $LIB_PATH"
-echo "  - $COMP_PATH"
-echo "  - $JARVIS_DATA_PATH"
-echo ""
+ui_panel info "Uninstall" \
+    "This action will remove:" \
+    "  - $BIN_PATH" \
+    "  - $LIB_PATH" \
+    "  - $COMP_PATH" \
+    "  - $JARVIS_DATA_PATH"
 
-printf "Are you sure you want to uninstall Jarvis? (y/N): "
+ui_panel question "Question" \
+    "Are you sure you want to uninstall Jarvis? (y/N):"
+printf "> "
 IFS= read -r confirm
 
 if [[ ! "$confirm" =~ ^([yY]|[yY][eE][sS])$ ]]; then
-    echo "Uninstall cancelled."
+    ui_panel info "Info" "Uninstall cancelled."
     exit 0
 fi
 
 rm -f "$BIN_PATH" "$COMP_PATH"
 rm -rf "$LIB_PATH" "$JARVIS_DATA_PATH"
 
-echo ""
-echo "Jarvis has been uninstalled successfully."
+ui_panel success "Success" "Jarvis has been uninstalled successfully."

@@ -338,8 +338,10 @@ Move into a repository. It works like `find`, but takes you there.
 jarvis go [root | current | <repository> | <keyword>]
 ```
 
-If several folders match, a menu lets you choose one. Your shell is opened in
-the chosen folder: type `exit` to come back.
+If several folders match, a menu lets you choose one. `jarvis go` changes the
+current shell's directory, so `cd -` returns to the previous directory. This
+shell integration is enabled for Bash, Zsh, and Fish by the installer and takes
+effect in new shells.
 
 ### Example
 

@@ -57,11 +57,11 @@ int UncompressGivenFiles(char *folder_path, pid_t pid)
 
     if (is_given_files_availabes)
     {
-        printf("\033[32mGiven files downloaded.\033[0m\n");
+        UiSuccess("Given files downloaded.");
     }
     else
     {
-        printf("No given files for this TP.\n");
+        UiInfo("No given files for this TP.");
         return EXIT_FAILURE;
     }
 

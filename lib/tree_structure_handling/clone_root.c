@@ -87,9 +87,9 @@ int __RemoteRepoExists(const char *url)
 // repository doesn't exist.
 char *__PromptForRepoUrl(void)
 {
-    printf("\033[33mWARNING Impossible to find your EPITA-TPs repository "
-           "automatically.\033[0m\n");
-    printf("Please enter the git URL of your EPITA-TPs repository:\n> ");
+    UiWarning("Impossible to find your EPITA-TPs repository automatically.");
+    UiQuestion("Please enter the git URL of your EPITA-TPs repository.");
+    printf("> ");
     fflush(stdout);
 
     char buffer[1024];
@@ -120,8 +120,7 @@ void __CloneParentRepo(void)
     {
         if (__IsGitRepositoryPath(root_folder))
         {
-            printf("\033[1;32mThe root repository is already cloned at "
-                   ":\033[0m\n\033[1m%s\033[0m\n\n",
+            UiInfo("The root repository is already cloned at:\n%s",
                    root_folder);
             free(root_folder);
             return;
@@ -142,9 +141,8 @@ void __CloneParentRepo(void)
 
         if (__IsGitRepositoryPath(repo_path))
         {
-            printf("\033[1;32mFound an existing root repository at "
-                   ":\033[0m\n\033[1m%s\033[0m\n\n",
-                   repo_path);
+            UiSuccess("Found an existing root repository at:\n%s",
+                      repo_path);
 
             WriteInfo("main_path", repo_path);
             WriteInfo("current", repo_path);
@@ -175,8 +173,7 @@ void __CloneParentRepo(void)
 
         if (!__RemoteRepoExists(url))
         {
-            printf("\033[33mWARNING Impossible to find %s at %s.\033[0m\n",
-                   REPO_NAME, url);
+            UiWarning("Impossible to find %s at %s.", REPO_NAME, url);
             free(url);
             url = __PromptForRepoUrl();
         }
@@ -186,8 +183,7 @@ void __CloneParentRepo(void)
         url = __PromptForRepoUrl();
     }
 
-    printf("\033[1mCloning the root repository :\033[0m\n\033[1m%s\033[0m\n\n",
-           url);
+    UiInfo("Cloning the root repository:\n%s", url);
 
     size_t command_size = strlen(url) + strlen(REPO_NAME) + SIZE_OF_STRING;
     char command[command_size];
@@ -214,8 +210,7 @@ void __CloneParentRepo(void)
     WriteInfo("main_path", full_path);
     WriteInfo("current", full_path);
 
-    printf("\033[1;32mRoot repository cloned at :\033[0m\n\033[1m%s\033[0m\n\n",
-           full_path);
+    UiSuccess("Root repository cloned at:\n%s", full_path);
 
     free(full_path);
 }

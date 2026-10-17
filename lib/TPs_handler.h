@@ -10,6 +10,7 @@
 #include "get_jarvis_paths.h"
 #include "info_file.h"
 #include "tree_structure.h"
+#include "ui.h"
 
 #define TPs_FOLDER_NAME "EPITA-TPs"
 #define GITIGNORE_CONTENT                                                      \

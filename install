@@ -2,7 +2,79 @@
 
 set -euo pipefail
 
-echo "Installing Jarvis..."
+ui_panel() {
+    local kind=$1
+    local title=$2
+    shift 2
+
+    local fd=1
+    local border_color=""
+    local title_color=""
+    local reset=""
+    case "$kind" in
+        warning)
+            fd=2
+            border_color=$'\033[33m'
+            title_color=$'\033[1;33m'
+            ;;
+        error)
+            fd=2
+            border_color=$'\033[31m'
+            title_color=$'\033[1;31m'
+            ;;
+        success)
+            border_color=$'\033[32m'
+            title_color=$'\033[1;32m'
+            ;;
+        *)
+            border_color=$'\033[90m'
+            title_color=$'\033[1m'
+            ;;
+    esac
+
+    if [[ ! -t $fd || -n "${NO_COLOR:-}" ]]; then
+        border_color=""
+        title_color=""
+    else
+        reset=$'\033[0m'
+    fi
+
+    local width=${#title}
+    local line
+    local i
+    for line in "$@"; do
+        if (( ${#line} > width )); then
+            width=${#line}
+        fi
+    done
+    (( width += 2 ))
+
+    {
+        printf '%s╭─ %s%s%s ' "$border_color" "$title_color" "$title" "$reset"
+        local dashes=$(( width - ${#title} - 3 ))
+        if (( dashes < 1 )); then
+            dashes=1
+        fi
+        printf '%s' "$border_color"
+        for ((i = 0; i < dashes; i++)); do
+            printf '─'
+        done
+        printf '╮%s\n' "$reset"
+
+        for line in "$@"; do
+            printf '%s│%s %s%*s %s│%s\n' "$border_color" "$reset" "$line" \
+                "$(( width - ${#line} - 2 ))" '' "$border_color" "$reset"
+        done
+
+        printf '%s╰' "$border_color"
+        for ((i = 0; i < width; i++)); do
+            printf '─'
+        done
+        printf '╯%s\n' "$reset"
+    } >&"$fd"
+}
+
+ui_panel info "Install" "Installing Jarvis..."
 
 NIX_PROFILE_PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin"
 export PATH="$NIX_PROFILE_PATH:$PATH"
@@ -22,25 +94,33 @@ fi
 
 if ((${#missing_packages[@]})); then
     if ! command -v nix >/dev/null 2>&1; then
-        echo "Missing build tools. Install Nix or provide make, cc, and git in PATH." >&2
+        ui_panel error "Missing build tools" \
+            "Install Nix or provide make, cc, and git in PATH."
         exit 1
     fi
-    nix profile add "${missing_packages[@]}"
+    if ! nix profile add "${missing_packages[@]}" >/dev/null; then
+        ui_panel error "Installation failed" \
+            "Could not install the required build tools with Nix."
+        exit 1
+    fi
     export PATH="$NIX_PROFILE_PATH:$PATH"
 fi
 
 for required_command in make cc git; do
     if ! command -v "$required_command" >/dev/null 2>&1; then
-        echo "Required command '$required_command' is still unavailable after installing Nix packages." >&2
+        ui_panel error "Missing build tool" \
+            "Required command '$required_command' is unavailable after installing Nix packages."
         exit 1
     fi
 done
 if ! make --version 2>/dev/null | grep -q '^GNU Make'; then
-    echo "GNU Make is required and is still unavailable after installing Nix packages." >&2
+    ui_panel error "Missing build tool" \
+        "GNU Make is unavailable after installing Nix packages."
     exit 1
 fi
 
-make
+ui_panel info "Build" "Building Jarvis..."
+make --silent
 
 BIN_PATH="$HOME/.local/bin"
 LIB_PATH="$HOME/.local/lib/jarvis"
@@ -56,30 +136,33 @@ cp bin/jarvis "$BIN_PATH/"
 cp -R commands/. "$LIB_PATH/cmd/"
 cp -R subject/. "$JARVIS_DATA_PATH/subject/"
 cp completion/jarvis.bash "$COMP_PATH/jarvis"
+cp completion/jarvis-shell.bash "$LIB_PATH/jarvis.bash"
+cp completion/jarvis-shell.fish "$LIB_PATH/jarvis.fish"
 
 chmod +x "$BIN_PATH/jarvis"
 chmod +x "$LIB_PATH/cmd/"*
-
-echo "Installation complete!"
-echo "Jarvis data directory: $JARVIS_DATA_PATH"
 
 shell_name="${SHELL##*/}"
 case "$shell_name" in
     bash)
         startup_file="$HOME/.bashrc"
         startup_line='export PATH="$HOME/.local/bin:$PATH"'
+        integration_line='[ -r "$HOME/.local/lib/jarvis/jarvis.bash" ] && . "$HOME/.local/lib/jarvis/jarvis.bash"'
         ;;
     zsh)
         startup_file="$HOME/.zshrc"
         startup_line='export PATH="$HOME/.local/bin:$PATH"'
+        integration_line='[ -r "$HOME/.local/lib/jarvis/jarvis.bash" ] && . "$HOME/.local/lib/jarvis/jarvis.bash"'
         ;;
     fish)
         startup_file="$HOME/.config/fish/config.fish"
         startup_line='fish_add_path "$HOME/.local/bin"'
+        integration_line='source "$HOME/.local/lib/jarvis/jarvis.fish"'
         ;;
     *)
         startup_file="$HOME/.profile"
         startup_line='export PATH="$HOME/.local/bin:$PATH"'
+        integration_line=""
         ;;
 esac
 
@@ -88,19 +171,19 @@ touch "$startup_file"
 if ! grep -Fqx "$startup_line" "$startup_file"; then
     printf '%s\n' "$startup_line" >> "$startup_file"
 fi
-
-echo "Added ~/.local/bin to PATH automatically in $startup_file."
-echo "The change will take effect in new shells."
-
+if [ -n "$integration_line" ] && ! grep -Fqx "$integration_line" "$startup_file"; then
+    printf '%s\n' "$integration_line" >> "$startup_file"
+fi
 
 J_PATH="$BIN_PATH/j"
 create_shortcut=0
+shortcut_status=""
 if [ -f "$J_PATH" ] && grep -q '^# Jarvis shortcut' "$J_PATH"; then
     create_shortcut=1
 elif command -v j >/dev/null 2>&1; then
-    echo "A command named 'j' already exists: the shortcut 'j' was not created."
+    shortcut_status="Shortcut j was not created because a command named 'j' already exists."
 elif grep -Eq '^[[:space:]]*(alias j=|alias j |function j([[:space:]]|\(|$)|j[[:space:]]*\(\))' "$startup_file"; then
-    echo "'j' is already defined in $startup_file: the shortcut 'j' was not created."
+    shortcut_status="Shortcut j was not created because it is already defined in $startup_file."
 else
     create_shortcut=1
 fi
@@ -108,7 +191,7 @@ fi
 if [ "$create_shortcut" -eq 1 ]; then
     printf '#!/bin/sh\n# Jarvis shortcut\nexec jarvis "$@"\n' > "$J_PATH"
     chmod +x "$J_PATH"
-    echo "Shortcut created: j = jarvis (ex: j c, j g, j pl)"
+    shortcut_status="Shortcut created: j = jarvis (ex: j c, j g, j pl)."
 
     # Autocompletion of "j" : same completion as "jarvis"
     cat > "$COMP_PATH/j" <<'COMPLETION_EOF'
@@ -123,3 +206,9 @@ fi
 unset _jarvis_completion_function
 COMPLETION_EOF
 fi
+
+ui_panel success "Installation complete" \
+    "Jarvis was installed successfully." \
+    "Data directory: $JARVIS_DATA_PATH" \
+    "Added ~/.local/bin to PATH and enabled shell navigation in $startup_file; this takes effect in new shells." \
+    "$shortcut_status"

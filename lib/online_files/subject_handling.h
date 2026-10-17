@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 
 #include "get_documents.h"
+#include "ui.h"
 
 int SubjectDownload(char *repo_name);
 int CreateSubjectElements(char *repo_path, pid_t pid);

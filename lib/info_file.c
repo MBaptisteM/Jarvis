@@ -95,7 +95,7 @@ int ReadInfo(char *key, char **value)
 int __CreateInfoFile()
 {
     char *info_file_full_path = GetInfoPath();
-    printf("Create : %s\n", info_file_full_path);
+    UiPanel(stderr, UI_INFO, "Info", "Create : %s", info_file_full_path);
     FILE *info_file = fopen(info_file_full_path, "w");
     free(info_file_full_path);
 

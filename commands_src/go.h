@@ -14,6 +14,7 @@
 #include "choice.h"
 #include "info_file.h"
 #include "tree_structure.h"
+#include "ui.h"
 
 #ifndef SEMESTER
 #    define SEMESTER "S"

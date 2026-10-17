@@ -59,12 +59,12 @@ int CleanFolder(char *folder_path)
             int status;
             if (waitpid(child, &status, 0) < 0 || !WIFEXITED(status)
                 || WEXITSTATUS(status) != 0)
-                errx(EXIT_FAILURE, "ERROR Impossible ro remove %s/%s",
+                errx(EXIT_FAILURE, "ERROR Impossible to remove %s/%s",
                      folder_path, entry->d_name);
         }
     }
 
-    printf("Content of %s deleted successfully.\n", folder_path);
+    UiSuccess("Content of %s deleted successfully.", folder_path);
 
     closedir(dir);
 

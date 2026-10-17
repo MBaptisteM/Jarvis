@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <strings.h>
 
+#include "ui.h"
+
 #define RESET "\033[0m"
 #define RED "\033[31m"
 #define BOLD "\033[1m"

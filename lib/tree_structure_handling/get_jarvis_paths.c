@@ -50,7 +50,7 @@ char *GetInfoPath()
 {
     char *home_path = NULL;
     if (GetDotJarvisPath(&home_path))
-        errx(EXIT_FAILURE, "ERROR Impoossible to find home path.");
+        errx(EXIT_FAILURE, "ERROR Impossible to find home path.");
 
     char *info_file_full_path = malloc(512);
     if (info_file_full_path == NULL)

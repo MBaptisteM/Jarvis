@@ -129,9 +129,9 @@ static const Command COMMANDS[] = {
       .usage = "jarvis go [root | current | <repository> | <keyword>]",
       .summary = "Go to a repository (like find, but moves you there).",
       .details =
-          "Finds a repository like find, then opens your shell in its folder "
-          "(type exit to come back). If several folders match, a choice is "
-          "proposed.",
+          "Finds a repository like find, then changes your current shell's "
+          "directory. This also updates OLDPWD, so \"cd -\" returns to the "
+          "previous directory. If several folders match, a choice is proposed.",
       .rows_title = "Arguments",
       .rows = { { "root", "Go to the root repository (default)." },
                 { "current", "Go to the current repository." },
@@ -461,20 +461,9 @@ static void __PrintCommandHelp(const Command *command)
 
 static void __PrintUnknown(const char *name)
 {
-    __InitStyle(stderr);
-    int width = __Width();
-
-    fprintf(out, "\n %sUsage:%s %sjarvis COMMAND [ARGS]...%s\n", K_BOLD,
-            K_RESET, K_NAME, K_RESET);
-    fprintf(out, " %sTry 'jarvis help' for help.%s\n", K_BORDER, K_RESET);
-
-    char message[512];
-    snprintf(message, sizeof(message), "No such command '%s'.", name);
-
-    __PanelTop("Error", width, K_ERROR);
-    __PanelRow(width, 0, NULL, message, K_ERROR);
-    __PanelBottom(width);
-    fprintf(out, "\n");
+    UiError("No such command '%s'.\n\nUsage: jarvis COMMAND [ARGS]...\n"
+            "Try 'jarvis help' for help.",
+            name);
 }
 
 int main(int argc, char *argv[])

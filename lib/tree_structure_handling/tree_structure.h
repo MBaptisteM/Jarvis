@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ui.h"
+
 #define MAX_PATH_SIZE 4096
 #define MARKED_FILE_NAME ".jarvis_mark"
 

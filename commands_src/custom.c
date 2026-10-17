@@ -42,6 +42,28 @@ static void __SetLayerPrefix(const char *layer, const char *prefix)
 }
 
 
+// Append a formatted text to a growing report (malloc'd, freed by the caller)
+static void __Report(char **report, size_t *size, const char *format, ...)
+{
+    va_list ap;
+    va_list copy;
+    va_start(ap, format);
+    va_copy(copy, ap);
+    int length = vsnprintf(NULL, 0, format, copy);
+    va_end(copy);
+
+    if (length > 0)
+    {
+        char *grown = realloc(*report, *size + (size_t)length + 1);
+        if (grown == NULL)
+            err(EXIT_FAILURE, "realloc");
+        *report = grown;
+        vsnprintf(*report + *size, (size_t)length + 1, format, ap);
+        *size += (size_t)length;
+    }
+    va_end(ap);
+}
+
 // Show where a repository of the 4th year / 2nd semester... would go
 // (bimester 8 = semester 4 = year 2)
 static void __PrintCurrent(void)
@@ -49,20 +71,23 @@ static void __PrintCurrent(void)
     char *folders[3];
     size_t count = GetLayerFolders(8, folders);
 
-    printf("\n\033[1mCurrent organization :\033[0m\n");
-    printf("  EPITA-TPs/");
+    char layout[512] = "EPITA-TPs/";
     for (size_t i = 0; i < count; i++)
     {
-        printf("%s/", folders[i]);
+        strncat(layout, folders[i], sizeof(layout) - strlen(layout) - 1);
+        strncat(layout, "/", sizeof(layout) - strlen(layout) - 1);
         free(folders[i]);
     }
-    printf("<repository>\n");
-    printf("  EPITA-TPs/Others/<repository>  (when the course can't be "
-           "deduced)\n");
+    strncat(layout, "<repository>", sizeof(layout) - strlen(layout) - 1);
+
+    UiPanel(stdout, UI_INFO, "Current organization",
+            "%s\nEPITA-TPs/Others/<repository>  (when the course can't be "
+            "deduced)",
+            layout);
 
     if (count == 0)
-        printf("\033[33mAll the layers are disabled : the repositories go "
-               "directly in the root repository.\033[0m\n");
+        UiWarning("All the layers are disabled : the repositories go directly "
+                  "in the root repository.");
 }
 
 
@@ -108,33 +133,30 @@ static int __AskPrefix(int layer_index)
     const char *layer = LAYERS[layer_index];
     char *current = GetLayerPrefix(layer);
 
-    char message[256];
-    snprintf(message, sizeof(message),
-             "\nPrefix of the %s folders (now \"%s\", ex : %s4)\n"
-             "Type the new prefix (letters, digits, - _ .), empty to "
-             "cancel : ",
-             LABELS[layer_index], current, current);
+    UiQuestion("Prefix of the %s folders (now \"%s\", ex : %s4)\n"
+               "Type the new prefix (letters, digits, - _ .), empty to cancel.",
+               LABELS[layer_index], current, current);
     free(current);
 
-    char *prefix = __ReadLine(message);
+    char *prefix = __ReadLine("> ");
     if (prefix == NULL)
     {
-        printf("Nothing changed.\n");
+        UiInfo("Nothing changed.");
         return 0;
     }
 
     if (!__IsValidPrefix(prefix))
     {
-        printf("\033[31mInvalid prefix : use 1 to %d characters among letters, "
-               "digits, - _ . (not starting with a dot).\033[0m\n",
-               PREFIX_MAX_LENGTH);
+        UiError("Invalid prefix : use 1 to %d characters among letters, "
+                "digits, - _ . (not starting with a dot).",
+                PREFIX_MAX_LENGTH);
         free(prefix);
         return 0;
     }
 
     __SetLayerPrefix(layer, prefix);
-    printf("\033[32m%s folders will now be named %s<n>.\033[0m\n",
-           LABELS[layer_index], prefix);
+    UiSuccess("%s folders will now be named %s<n>.", LABELS[layer_index],
+              prefix);
     free(prefix);
     return 1;
 }
@@ -143,7 +165,7 @@ static int __PrefixesMenu(void)
 {
     int changed = 0;
 
-    printf("\n\033[1mWhich prefix do you want to change ?\033[0m\n\n");
+    UiQuestion("Which prefix do you want to change ?");
     while (1)
     {
         char labels[4][128];
@@ -166,7 +188,6 @@ static int __PrefixesMenu(void)
 
         if (__AskPrefix(choice))
             changed = 1;
-        printf("\n");
     }
 
     return changed;
@@ -177,8 +198,8 @@ static int __LayersMenu(void)
 {
     int changed = 0;
 
-    printf("\n\033[1mWhich layers should be used ?\033[0m (select a layer to "
-           "enable or disable it)\n\n");
+    UiQuestion("Which layers should be used ?\n"
+               "(select a layer to enable or disable it)");
     while (1)
     {
         char labels[4][128];
@@ -209,14 +230,14 @@ static int __LayersMenu(void)
 
 static int __Reset(void)
 {
-    printf("\n\033[1mReset the organization to the default one ?\033[0m\n\n");
+    UiQuestion("Reset the organization to the default one ?");
 
     const char *options[] = { "No, keep my settings",
                               "Yes, reset (Semester and Bimester only, "
                               "default prefixes)" };
     if (ChoiceMCQ(options, 2) != 1)
     {
-        printf("Nothing changed.\n");
+        UiInfo("Nothing changed.");
         return 0;
     }
 
@@ -226,7 +247,7 @@ static int __Reset(void)
         __SetLayerPrefix(LAYERS[i], GetDefaultLayerPrefix(LAYERS[i]));
     }
 
-    printf("\033[32mDefault organization restored.\033[0m\n");
+    UiSuccess("Default organization restored.");
     return 1;
 }
 
@@ -673,8 +694,8 @@ static int __ApplyOrganization(void)
     char *root = NULL;
     if (ReadRootPath(&root) != EXIT_SUCCESS || root == NULL)
     {
-        printf("\033[33mWARNING Root repository not found, the tree was not "
-               "reorganized.\033[0m\n");
+        UiWarning("Root repository not found, the tree was not "
+                  "reorganized.");
         return -1;
     }
 
@@ -692,9 +713,10 @@ static int __ApplyOrganization(void)
         current = NULL;
 
     int moved = 0;
-    printf("\n\033[1mApplying the organization to the current tree "
-           "(%zu repositories found in %s)...\033[0m\n",
-           repos.count, root);
+    char *report = NULL;
+    size_t report_size = 0;
+    __Report(&report, &report_size, "%zu repositories found in %s",
+             repos.count, root);
 
     for (size_t i = 0; i < repos.count; i++)
     {
@@ -710,8 +732,8 @@ static int __ApplyOrganization(void)
         // Not deducible (Others folder, classic clone...) : left untouched
         if (bimester < 1)
         {
-            printf("  skipped (Others folder or unknown layout) : %s\n",
-                   repo);
+            __Report(&report, &report_size,
+                     "\nskipped (Others folder or unknown layout) : %s", repo);
             continue;
         }
 
@@ -737,14 +759,12 @@ static int __ApplyOrganization(void)
         {
             if (access(destination, F_OK) == 0)
             {
-                printf("\033[33mWARNING %s already exists, %s was not "
-                       "moved.\033[0m\n",
-                       destination, repo);
+                UiWarning("%s already exists, %s was not moved.",
+                          destination, repo);
             }
             else if (__MakeDirs(target_parent) != EXIT_SUCCESS)
             {
-                printf("\033[33mWARNING Impossible to create %s.\033[0m\n",
-                       target_parent);
+                UiWarning("Impossible to create %s.", target_parent);
             }
             else
             {
@@ -760,8 +780,7 @@ static int __ApplyOrganization(void)
                 if (__RunProgram(git_mv) != EXIT_SUCCESS
                     && rename(repo, destination) != 0)
                 {
-                    printf("\033[33mWARNING Impossible to move %s.\033[0m\n",
-                           repo);
+                    UiWarning("Impossible to move %s.", repo);
                     }
                 else
                 {
@@ -770,7 +789,8 @@ static int __ApplyOrganization(void)
                                        "--",  destination, NULL };
                     __RunProgram(absorb);
 
-                    printf("  %s\n    -> %s\n", repo, destination);
+                    __Report(&report, &report_size, "\n%s\n  -> %s", repo,
+                             destination);
                     moved++;
 
                     if (current != NULL && strcmp(current, repo) == 0)
@@ -797,8 +817,13 @@ static int __ApplyOrganization(void)
     free(root);
 
     if (moved == 0)
-        printf("Nothing to move, the tree already matches the "
-               "organization.\n");
+        __Report(&report, &report_size,
+                 "\n\nNothing to move, the tree already matches the "
+                 "organization.");
+    UiPanel(stdout, UI_INFO, "Organization", "%s", report);
+    free(report);
+    if (moved > 0)
+        UiSuccess("%d repositories moved.", moved);
 
     return moved;
 }
@@ -815,8 +840,8 @@ static int __Finish(int push)
         if (AddRepoRoot() != EXIT_SUCCESS
             || PushRepoRoot("Reorganize tree structure") != EXIT_SUCCESS)
         {
-            printf("\033[33mWARNING The changes could not be pushed, run "
-                   "'jarvis push root'.\033[0m\n");
+            UiWarning("The changes could not be pushed, run 'jarvis push "
+                      "root'.");
             return EXIT_FAILURE;
         }
     }
@@ -833,14 +858,15 @@ int main(int argc, char *argv[])
     // Reading a setting creates the info file when it doesn't exist yet
     IsLayerEnabled("year");
 
-    printf("\033[1mCustomize the tree structure of your repositories\033[0m\n");
+    UiPanel(stdout, UI_INFO, "Custom",
+            "Customize the tree structure of your repositories");
     __PrintCurrent();
 
     int changed = 0;
     int running = 1;
     while (running)
     {
-        printf("\n\033[1mWhat do you want to change ?\033[0m\n\n");
+        UiQuestion("What do you want to change ?");
 
         const char *options[] = {
             "Layers : enable or disable Year / Semester / Bimester folders",
@@ -883,8 +909,8 @@ int main(int argc, char *argv[])
     if (changed)
     {
         int result = __Finish(0);
-        printf("\033[33mNot pushed : choose \"Save\" next time, or run "
-               "'jarvis push root'.\033[0m\n");
+        UiWarning("Not pushed : choose \"Save\" next time, or run 'jarvis "
+                  "push root'.");
         return result;
     }
 

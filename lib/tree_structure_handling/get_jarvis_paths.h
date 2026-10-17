@@ -7,6 +7,7 @@
 
 #include "info_file.h"
 #include "tree_structure.h"
+#include "ui.h"
 
 #define INFORMATION_FILE_NAME "info_file"
 

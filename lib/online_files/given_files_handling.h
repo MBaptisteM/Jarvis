@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 
 #include "get_documents.h"
+#include "ui.h"
 
 #define SIZE_OF_STRING 512
 #define TEMPORARY_FOLDER "tmp"

@@ -132,7 +132,7 @@ void __FindRoot(void)
 
     __TrimTrailing(main_folder_path);
 
-    printf("%s\n", main_folder_path);
+    UiInfo("%s", main_folder_path);
 
     free(main_folder_path);
 }
@@ -241,7 +241,7 @@ void __FindCurrent(void)
         WriteInfo("current", path);
     }
 
-    printf("%s\n", path);
+    UiInfo("%s", path);
 
     free(path);
     free(main_folder_path);
@@ -290,12 +290,12 @@ void __FindRepository(char *repo_arg)
 
             // FindFileBFS returns the parent folder of what was found
             char *joined_path = __JoinFound(found_path, repo_name);
-            printf("%s\n", joined_path);
+            UiInfo("%s", joined_path);
             free(joined_path);
             free(found_path);
         }
         else
-            printf("%s\n", repo_path);
+            UiInfo("%s", repo_path);
 
         free(repo_name);
         free(main_folder_path);
@@ -427,7 +427,7 @@ void __FindEpitaUrlInTree(char *url)
                 if (strncasecmp(entry->d_name, stubborn, len_stubborn) == 0
                     && entry->d_name[len_stubborn] == '-')
                 {
-                    printf("%s\n", full_path);
+                    UiInfo("%s", full_path);
                     found_any = 1;
                 }
             }
@@ -452,16 +452,16 @@ void __FindEpitaUrlInTree(char *url)
 
         if (IsDirectory(other_path))
         {
-            printf("%s\n", other_path);
+            UiInfo("%s", other_path);
             found_any = 1;
         }
     }
 
     if (!found_any)
-        printf("\033[1;31mWARNING Impossible to find this repository's title "
-               "in %s (it might not be cloned yet, or the tree structure is "
-               "unexpected).\033[0m\n",
-               target_path);
+        UiWarning("Impossible to find this repository's title in %s (it "
+                  "might not be cloned yet, or the tree structure is "
+                  "unexpected).",
+                  target_path);
 }
 
 // Search every repo title for "word" as a case-insensitive substring,
@@ -489,9 +489,8 @@ void __FindByKeyword(char *word)
     __SearchTree(main_folder_path, word, &found_any);
 
     if (!found_any)
-        printf("\033[1;31mWARNING No repository title contains \"%s\" "
-               "(searched from %s).\033[0m\n",
-               word, main_folder_path);
+        UiWarning("No repository title contains \"%s\" (searched from %s).",
+                  word, main_folder_path);
 
     free(main_folder_path);
 }
@@ -552,7 +551,7 @@ void __SearchTree(const char *path, const char *word, int *found_any)
 
         if (__ContainsWord(entry->d_name, word))
         {
-            printf("%s\n", full_path);
+            UiInfo("%s", full_path);
             (*found_any) = 1;
             continue;
         }

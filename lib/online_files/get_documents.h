@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "ui.h"
+
 #define URL "https://intra.forge.epita.fr/"
 #define BEGINING_REPO_LOCAL_PATH "forge.epita.fr:p/"
 

@@ -144,7 +144,7 @@ char *GetOrCreateRepoRoot()
         // Auth GitHub
         if (system("gh auth status > /dev/null 2>&1") != 0)
         {
-            printf("GitHub authentication required.\n");
+            UiInfo("GitHub authentication required.");
 
             if (system("gh auth login") != 0)
                 errx(EXIT_FAILURE, "GitHub authentication failed");
@@ -314,7 +314,7 @@ int AddRepoRoot()
     if (system(park_command))
     {
         if (system(restore_command) != 0)
-            printf("WARNING Unable to restore nested Git metadata.\n");
+            UiWarning("Unable to restore nested Git metadata.");
         return EXIT_FAILURE;
     }
     //     "> /dev/null 2>&1"
@@ -330,8 +330,7 @@ int AddRepoRoot()
     if (add_result != 0 || restore_result != 0 || stale_metadata_result != 0
         || heal_result != 0)
     {
-        printf("\033[31mWARNING Impossible to add elements in the root "
-               "repo\033[0m\n");
+        UiError("Impossible to add elements in the root repo");
         // RestoreGitFolders();
         return EXIT_FAILURE;
     }
@@ -355,8 +354,7 @@ static int __PushRepoRoot(char *commit_name, int force_push)
     if (staged_changes == -1 || !WIFEXITED(staged_changes)
         || WEXITSTATUS(staged_changes) > 1)
     {
-        printf("\033[31mWARNING Impossible to check changes in the root repo"
-               "\033[0m\n");
+        UiError("Impossible to check changes in the root repo");
         return EXIT_FAILURE;
     }
     if (WEXITSTATUS(staged_changes) == 1)
@@ -366,8 +364,7 @@ static int __PushRepoRoot(char *commit_name, int force_push)
                  "git commit -m \"%s\" > /dev/null", commit_name);
         if (system(commit_command))
         {
-            printf("\033[31mWARNING Impossible to commit the root repo"
-                   "\033[0m\n");
+            UiError("Impossible to commit the root repo");
             return EXIT_FAILURE;
 
         }
@@ -375,11 +372,11 @@ static int __PushRepoRoot(char *commit_name, int force_push)
     // Push
     if (system(force_push ? "git push --force-with-lease" : "git push"))
     {
-        printf("\033[31mWARNING Impossible to push the root repo\033[0m\n");
+        UiError("Impossible to push the root repo");
         return EXIT_FAILURE;
     }
 
-    printf("\033[32mRepo root sucessfuly pushed\033[0m\n");
+    UiSuccess("Root repository successfully pushed.");
 
     return EXIT_SUCCESS;
 }
@@ -408,8 +405,7 @@ int PushRepo(char *repo_path, char *commit_name, char *tag)
     // Add
     if (system("git add . "))
     {
-        printf(
-            "\033[31mWARNING Impossible to add elements in the repo\033[0m\n");
+        UiError("Impossible to add elements in the repo");
         return EXIT_FAILURE;
     }
 
@@ -425,8 +421,7 @@ int PushRepo(char *repo_path, char *commit_name, char *tag)
         while (system(tag_command) && i < 50)
         {
             if (i == 0)
-                error_message = "\033[31mWARNING Impossible to add the tags of "
-                                "the repo\033[0m\n";
+                error_message = "Impossible to add the tags of the repo";
             i++;
 
             __AddOneToTag(&tag);
@@ -436,7 +431,7 @@ int PushRepo(char *repo_path, char *commit_name, char *tag)
         }
         if (i == 50)
         {
-            printf("%s", error_message);
+            UiError("%s", error_message);
             return EXIT_FAILURE;
         }
     }
@@ -447,7 +442,7 @@ int PushRepo(char *repo_path, char *commit_name, char *tag)
              "git commit -m \"%s\"", commit_name);
     if (system(commit_command))
     {
-        printf("\033[31mWARNING Impossible to commit the repo\033[0m\n");
+        UiError("Impossible to commit the repo");
         return EXIT_FAILURE;
     }
 
@@ -455,11 +450,11 @@ int PushRepo(char *repo_path, char *commit_name, char *tag)
     if ((tag == NULL && system("git push"))
         || (tag != NULL && system("git push --tags")))
     {
-        printf("\033[31mWARNING Impossible to push the repo\033[0m\n");
+        UiError("Impossible to push the repo");
         return EXIT_FAILURE;
     }
 
-    printf("\033[32mRepo sucessfuly pushed\033[0m\n");
+    UiSuccess("Repository successfully pushed.");
 
     return EXIT_SUCCESS;
 }

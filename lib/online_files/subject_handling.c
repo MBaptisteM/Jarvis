@@ -27,7 +27,7 @@ int CreateSubjectElements(char *repo_path, pid_t pid)
     if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status)
         || WEXITSTATUS(status) != EXIT_SUCCESS)
         return EXIT_FAILURE;
-    printf("\033[32mSubject downloaded.\033[0m\n");
+    UiSuccess("Subject downloaded.");
 
     char subject_path[SIZE_OF_STRING + 20];
     snprintf(subject_path, SIZE_OF_STRING, "%s/%s", GetSubjectFolderPath(),

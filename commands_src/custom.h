@@ -11,6 +11,7 @@
 
 #include "choice.h"
 #include "info_file.h"
+#include "ui.h"
 
 
 const char *GetDefaultLayerPrefix(const char *layer);

@@ -9,6 +9,7 @@
 
 #include "TPs_handler.h"
 #include "info_file.h"
+#include "ui.h"
 
 #define COMMAND_TAG "tag="
 #define COMMAND_NAME "name="

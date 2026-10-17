@@ -50,9 +50,8 @@ static char *__FindRootRepository(char *recorded_path)
     snprintf(repo_path, repo_path_size, "%s/EPITA-TPs", recorded_path);
     if (__IsGitRepositoryPath(repo_path))
     {
-        fprintf(stderr,
-                "WARNING: correcting the saved root repository path to %s\n",
-                repo_path);
+        UiWarning("Correcting the saved root repository path to %s",
+                  repo_path);
         WriteInfo("main_path", repo_path);
         free(recorded_path);
         return repo_path;
@@ -97,9 +96,7 @@ static void __HealSubmodules(const char *repo_path)
     snprintf(command, command_size, "cd \"%s\" && %s", repo_path,
              HEAL_SUBMODULES_SCRIPT);
     if (system(command) != 0)
-        printf("\033[33mWARNING Impossible to check the submodules of "
-               "%s.\033[0m\n",
-               repo_path);
+        UiWarning("Impossible to check the submodules of %s.", repo_path);
     free(command);
 }
 
@@ -119,9 +116,8 @@ void __PullMain(void)
              "Run 'jarvis auth' or 'jarvis clone all' to locate it again.",
              root_folder);
 
-    printf("\033[1mPulling all repositories starting from "
-           ":\033[0m\n\033[1m%s\033[0m\n\n",
-           root_folder);
+    UiPanel(stdout, UI_INFO, "Pull",
+            "Pulling all repositories starting from:\n%s", root_folder);
 
     __PullRepo(root_folder);
 
@@ -314,7 +310,7 @@ void __PullRepository(char *repo_arg)
 
 void __PullRepo(char *repo_path)
 {
-    printf("\033[1;32mPulling :\033[0m\n\033[1m%s\033[0m\n\n", repo_path);
+    UiPanel(stdout, UI_INFO, "Pull", "Pulling:\n%s", repo_path);
 
     // 1. Pull the repository itself, this must succeed
     size_t command_size = strlen(repo_path) + SIZE_OF_STRING;
@@ -366,9 +362,9 @@ void __PullRepo(char *repo_path)
         repo_path);
 
     if (system(submodule_command))
-        printf("\033[33mWARNING: some submodules of %s could not be fully "
-               "synced automatically, check the output above.\033[0m\n",
-               repo_path);
+        UiWarning("Some submodules of %s could not be fully synced "
+                  "automatically, check the output above.",
+                  repo_path);
 
     printf("\n");
 }

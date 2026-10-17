@@ -171,7 +171,7 @@ char *GetCurrentRepo()
         errx(EXIT_FAILURE, "ERROR No repository found");
 
     int final_ind = 0;
-    printf("\033[1mWhich repository do you want to clone ?\033[0m\n\n");
+    UiQuestion("Which repository do you want to clone ?");
 
     char **repos_mcq = calloc(ind_repos, sizeof(char *));
     if (repos_mcq == NULL)
@@ -240,7 +240,7 @@ int PageDownload(char *url, char *file_name)
              "ERROR Impossible to get the home page (failed twice). [Retry or "
              "Auth again]");
 
-    printf("Downloaded with %s%s in %s\n", URL, url, file_name);
+    UiInfo("Downloaded with %s%s in %s", URL, url, file_name);
     return EXIT_SUCCESS;
 }
 
@@ -355,9 +355,9 @@ static int __SoftPageDownload(char *url, char *file_name)
         result = DowloadPage(url, file_name);
 
     if (result)
-        printf("\033[33mWARNING Impossible to download %s\033[0m\n", url);
+        UiWarning("Impossible to download %s", url);
     else
-        printf("Downloaded with %s%s in %s\n", URL, url, file_name);
+        UiInfo("Downloaded with %s%s in %s", URL, url, file_name);
 
     return result;
 }
@@ -542,8 +542,8 @@ char *ExtractRepo(char *url)
     // 2. Deduce it : login@git.forge.epita.fr:p/<type>/<id>/<type>-<id>-<login>.git
     if (repo_url == NULL)
     {
-        printf("\033[33mWARNING Git url not found on the repository page, "
-               "deducing it from the repository path.\033[0m\n");
+        UiWarning("Git url not found on the repository page, deducing it "
+                  "from the repository path.");
 
         char *login = __FindForgeLogin();
         if (login == NULL)
@@ -556,7 +556,7 @@ char *ExtractRepo(char *url)
         }
 
         if (repo_url != NULL)
-            printf("Deduced git url : \033[1m%s\033[0m\n", repo_url);
+            UiInfo("Deduced git url : %s", repo_url);
     }
 
     // 3. Last resort : ask the user

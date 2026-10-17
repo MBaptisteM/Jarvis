@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "TPs_handler.h"
+#include "ui.h"
 
 static int __IsGitRoot(void)
 {
@@ -38,16 +39,32 @@ static int __GetHeadHash(char *hash, size_t hash_size)
 
 static void __PrintRestoreCommand(const char *root_path, const char *hash)
 {
-    printf("\nTo restore the root repository before erase, run:\n  git -C '");
+    // Path between single quotes, every ' becomes '\''
+    char *quoted = malloc(4 * strlen(root_path) + 3);
+    if (quoted == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    size_t k = 0;
+    quoted[k++] = '\'';
     for (const char *c = root_path; *c != '\0'; c++)
     {
         if (*c == '\'')
-            printf("'\\''");
+        {
+            memcpy(quoted + k, "'\\''", 4);
+            k += 4;
+        }
         else
-            putchar(*c);
+            quoted[k++] = *c;
     }
-    printf("' restore --source=%s --staged --worktree .\n", hash);
-    printf("Then run 'jarvis push root' to publish the restored files.\n");
+    quoted[k++] = '\'';
+    quoted[k] = '\0';
+
+    UiPanel(stdout, UI_INFO, "Restore",
+            "To restore the root repository before erase, run:\n"
+            "  git -C %s restore --source=%s --staged --worktree .\n"
+            "Then run 'jarvis push root' to publish the restored files.",
+            quoted, hash);
+    free(quoted);
 }
 
 int main(int argc, char *argv[])
@@ -67,18 +84,19 @@ int main(int argc, char *argv[])
              "%s",
              root_path);
 
-    printf("This will push a backup, delete all content in the root repository\n"
-           "except .git, and push the cleaned repository:\n%s\n"
-           "WARNING: the backup push replaces remote-only commits.\n"
-           "Ignored files are not included in the Git backup. Continue? [y/N] ",
-           root_path);
+    UiWarning("This will push a backup, delete all content in the root "
+              "repository except .git, and push the cleaned repository:\n%s\n\n"
+              "The backup push replaces remote-only commits. Ignored files are "
+              "not included in the Git backup.",
+              root_path);
+    printf("Continue? [y/N] ");
     fflush(stdout);
 
     char confirmation[16];
     if (fgets(confirmation, sizeof(confirmation), stdin) == NULL
         || (confirmation[0] != 'y' && confirmation[0] != 'Y'))
     {
-        printf("Erase cancelled.\n");
+        UiInfo("Erase cancelled.");
         free(root_path);
         return EXIT_SUCCESS;
     }
