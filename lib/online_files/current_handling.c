@@ -1,6 +1,15 @@
 #include "current_handling.h"
 
 #include <ctype.h>
+#include <strings.h>
+
+int IsCurrentKeyword(const char *argument)
+{
+    return strcasecmp(argument, "current") == 0 || strcasecmp(argument, "c") == 0
+        || strcasecmp(argument, "cu") == 0
+        || strcasecmp(argument, "cur") == 0
+        || strcasecmp(argument, "curr") == 0;
+}
 
 typedef struct
 {

@@ -28,6 +28,7 @@
 * [Commands](#commands)
   * [Authentication Command](#authentication-command)
   * [Clone Command](#clone-command)
+  * [Fill Command](#fill-command)
   * [Pull Command](#pull-command)
   * [Push Command](#push-command)
   * [Find Command](#find-command)
@@ -65,7 +66,7 @@ Jarvis can authenticate directly with your EPITA Forge account.
 
 Features:
 
-* Secure login workflow.
+* Secure login workflow, in a browser window (default) or directly in the console.
 * Session persistence.
 * Cookie storage for future executions.
 * Automatic reuse of saved sessions.
@@ -209,11 +210,17 @@ jarvis auth
 
 ### What happens
 
-1. A browser window is opened.
-2. You authenticate on EPITA Forge.
-3. Jarvis stores the session.
-4. Future executions reuse the saved session.
-5. Your root repository is located (or cloned if it doesn't exist yet).
+1. You choose how to authenticate:
+   * **Browser** (default): a window is opened, you authenticate on EPITA Forge
+     and close it.
+   * **Console**: you type your username and password, and Jarvis signs in and
+     gets the cookies by itself. The password is hidden, sent to the login
+     script through its standard input, and never saved.
+2. Jarvis stores the session.
+3. Future executions reuse the saved session.
+4. Your root repository is located (or cloned if it doesn't exist yet).
+
+Without a terminal (script, pipe), the browser is used without asking.
 
 
 
@@ -224,11 +231,12 @@ Clone and organize a repository.
 ### Usage
 
 ```bash
-jarvis clone [all | current | <remote-repository>]
+jarvis clone [all | current/c/cu/cur/curr | <remote-repository>]
 ```
 
 * No argument, or `all`: finds your root repository, or clones it if it doesn't exist yet.
-* `current`: lists your Forge projects so you can pick the one to clone.
+* `current` (or `c`, `cu`, `cur`, `curr`): lists your Forge projects so you
+  can pick the one to clone.
 * `<remote-repository>`: clones the specified repository.
 
 ### Example
@@ -250,6 +258,40 @@ jarvis clone firstname.lastname@git.forge.epita.fr:p/example/repository.git
 
 
 
+## Fill Command
+
+Clone many repositories of the forge at once.
+
+### Usage
+
+```bash
+jarvis fill [old | all | current/now | <project>]
+```
+
+* No argument, `old`, `anc`, `ancient` or `past`: every finished repository.
+* `all`: every repository, finished or not.
+* `current` or `now`: only the repositories that are not finished.
+* `<project>` (ex: `epita-prepa-computer-science`): every repository listed on
+  the page of that project.
+
+Each repository is cloned like `jarvis clone` does, without any question:
+repositories already cloned are skipped, the content of a repository that is not
+empty is never changed, and the root repository is pushed once at the end.
+
+A repository whose course can't be deduced goes in `Others/<project>/`
+(ex: `Others/epita-prepa-computer-science/`). A repository whose course is known
+is placed by its semester/bimester, whatever its project.
+
+### Example
+
+```bash
+jarvis fill
+jarvis fill now
+jarvis fill epita-prepa-computer-science
+```
+
+
+
 ## Pull Command
 
 Pull and update repositories, submodules included.
@@ -257,11 +299,12 @@ Pull and update repositories, submodules included.
 ### Usage
 
 ```bash
-jarvis pull [all | current | <repository>]
+jarvis pull [all | current/c/cu/cur/curr | <repository>]
 ```
 
 * No argument, or `all`: pulls the root repository and every repository of the tree.
-* `current`: pulls the repository currently marked as active.
+* `current` (or `c`, `cu`, `cur`, `curr`): pulls the repository currently
+  marked as active.
 * `<repository>`: pulls this repository directly if it has already been cloned.
 
 Submodules are initialized, checked out and pulled recursively. A submodule
@@ -284,11 +327,12 @@ Commit and push a repository together with the root repository.
 ### Usage
 
 ```bash
-jarvis push [root | current | <path>]
+jarvis push [root | current/c/cu/cur/curr | <path>]
 ```
 
 * No argument: pushes the repository of the current folder.
-* `current`: pushes the repository currently marked as active.
+* `current` (or `c`, `cu`, `cur`, `curr`): pushes the repository currently
+  marked as active.
 * `root`: pushes only the root repository.
 * `<path>`: pushes the repository located at this path.
 
@@ -311,11 +355,12 @@ Locate the local path of a repository without touching it.
 ### Usage
 
 ```bash
-jarvis find [root | current | <repository> | <keyword>]
+jarvis find [root | current/c/cu/cur/curr | <repository> | <keyword>]
 ```
 
 * No argument, or `root`: prints the path of the root repository.
-* `current`: prints the path of the currently active repository.
+* `current` (or `c`, `cu`, `cur`, `curr`): prints the path of the currently
+  active repository.
 * A known git remote: prints its local path, re-locating it automatically if it moved.
 * Any other word: searches every repository title under the root repository and prints the matching paths.
 
@@ -335,8 +380,11 @@ Move into a repository. It works like `find`, but takes you there.
 ### Usage
 
 ```bash
-jarvis go [root | current | <repository> | <keyword>]
+jarvis go [root | current/c/cu/cur/curr | <repository> | <keyword>]
 ```
+
+Use `current`, `c`, `cu`, `cur` or `curr` to go to the currently active
+repository.
 
 If several folders match, a menu lets you choose one. `jarvis go` changes the
 current shell's directory, so `cd -` returns to the previous directory. This
@@ -434,6 +482,7 @@ Are you sure you want to uninstall Jarvis? [y/N]
 |-------------|----------|
 | `auth`      | `a`      |
 | `clone`     | `c`      |
+| `fill`      | `fl`     |
 | `pull`      | `pl`     |
 | `push`      | `ps`     |
 | `find`      | `f`      |

@@ -15,6 +15,8 @@
 #include "info_file.h"
 #include "tree_structure.h"
 #include "ui.h"
+#include "get_jarvis_paths.h"
+#include "current_handling.h"
 
 #ifndef SEMESTER
 #    define SEMESTER "S"
@@ -25,10 +27,5 @@
 
 #define OTHERS_FOLDER_NAME "Others"
 
-// 0 : found | 1 : not found (searches the root repo again if it moved)
-int ReadRootPath(char **value);
-
-// Folders of the enabled layers (see "jarvis custom") for a bimester number
-size_t GetLayerFolders(int bimester, char **folders);
 
 #endif /* GO_H */

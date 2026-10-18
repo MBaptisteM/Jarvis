@@ -1,11 +1,4 @@
-#define _GNU_SOURCE
 #include "ui.h"
-
-#include <ctype.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
 
 typedef struct
 {
@@ -148,12 +141,17 @@ static const char *__StripPrefix(const char *message)
     return message;
 }
 
+// Set by UiPanelBold : the text of the rows is drawn in bold
+static int __bold_text = 0;
+
 static void __Row(FILE *mem, const Style *style, int text_width, const char *p,
                   size_t n)
 {
     int pad = text_width - __Cols(p, n);
-    fprintf(mem, "%s│%s %.*s%*s %s│%s\n", style->border, style->reset, (int)n,
-            p, pad, "", style->border, style->reset);
+    const char *text = __bold_text && style->reset[0] != '\0' ? "\033[1m" : "";
+    const char *end = text[0] != '\0' ? style->reset : "";
+    fprintf(mem, "%s│%s %s%.*s%s%*s %s│%s\n", style->border, style->reset, text,
+            (int)n, p, end, pad, "", style->border, style->reset);
 }
 
 static void __Render(FILE *stream, UiKind kind, const char *title,
@@ -260,6 +258,18 @@ void UiPanel(FILE *stream, UiKind kind, const char *title, const char *fmt, ...)
     va_list ap;
     va_start(ap, fmt);
     __Render(stream, kind, title, NULL, fmt, ap);
+    va_end(ap);
+}
+
+// Same as UiPanel, with the text in bold (to be sure it is seen)
+void UiPanelBold(FILE *stream, UiKind kind, const char *title, const char *fmt,
+                 ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    __bold_text = 1;
+    __Render(stream, kind, title, NULL, fmt, ap);
+    __bold_text = 0;
     va_end(ap);
 }
 

@@ -238,7 +238,9 @@ static void __CollectEpitaUrl(const char *url, const char *root)
         if (folder_name == NULL)
             err(EXIT_FAILURE, "strndup");
 
-        char *others = __Join(root, OTHERS_FOLDER_NAME);
+        char *others_name = GetOthersFolderName();
+        char *others = __Join(root, others_name);
+        free(others_name);
         char *repo = __Join(others, folder_name);
         if (IsDirectory(repo))
             __AddPath(repo);
@@ -339,7 +341,7 @@ int main(int argc, char *argv[])
 
     if (argc < 2 || strcasecmp(argv[1], "root") == 0)
         __AddPath(root);
-    else if (strcasecmp(argv[1], "current") == 0)
+    else if (IsCurrentKeyword(argv[1]))
         __CollectCurrent(root);
     else if (!__CollectKnown(argv[1], root))
     {

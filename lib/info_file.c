@@ -1,10 +1,5 @@
 #include "info_file.h"
 
-#include <ctype.h>
-#include <unistd.h>
-
-// REWRITE TO BECOME READINFO
-
 static const char *__InfoValueForKey(const char *line, const char *key)
 {
     while (*line == '\0' || isspace((unsigned char)*line))
@@ -107,7 +102,7 @@ int __CreateInfoFile()
     return EXIT_SUCCESS;
 }
 
-int WriteInfo(char *key, char *value)
+static int __WriteInfoUnlocked(char *key, char *value)
 {
     char *info_file_full_path = GetInfoPath();
     FILE *info_file = fopen(info_file_full_path, "r");
@@ -178,4 +173,50 @@ int WriteInfo(char *key, char *value)
     free(info_file_full_path);
 
     return write_failed ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+int JarvisLockAcquire(const char *name)
+{
+    char *info_path = GetInfoPath();
+    size_t size = strlen(info_path) + strlen(name) + 2;
+    char *lock_path = malloc(size);
+    if (lock_path == NULL)
+    {
+        free(info_path);
+        return -1;
+    }
+    snprintf(lock_path, size, "%s.%s", info_path, name);
+    free(info_path);
+
+    int fd = open(lock_path, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+    free(lock_path);
+    if (fd < 0)
+        return -1;
+
+    while (flock(fd, LOCK_EX) != 0)
+    {
+        if (errno != EINTR)
+        {
+            close(fd);
+            return -1;
+        }
+    }
+    return fd;
+}
+
+void JarvisLockRelease(int fd)
+{
+    if (fd < 0)
+        return;
+    flock(fd, LOCK_UN);
+    close(fd);
+}
+
+// Read-modify-write of the info file, serialized between processes
+int WriteInfo(char *key, char *value)
+{
+    int lock = JarvisLockAcquire("lock");
+    int result = __WriteInfoUnlocked(key, value);
+    JarvisLockRelease(lock);
+    return result;
 }

@@ -1,4 +1,5 @@
 #include "push.h"
+#include "current_handling.h"
 
 int main(int argc, char *argv[])
 {
@@ -19,7 +20,7 @@ int main(int argc, char *argv[])
             path = argv[k];
         }
         // Case current
-        else if (strcasecmp(argv[k], "current") == 0)
+        else if (IsCurrentKeyword(argv[k]))
         {
             if (ReadInfo("current", &path))
                 errx(EXIT_FAILURE,

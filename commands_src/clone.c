@@ -1,13 +1,8 @@
 #include "clone.h"
 
-#include "clone_root.h"
-
-int ReadRootPath(char **value);
-size_t GetLayerFolders(int bimester, char **folders);
-
-#include <ctype.h>
-
-#define OTHERS_FOLDER_NAME "Others"
+char *GetOthersFolderName(void);
+int JarvisLockAcquire(const char *name);
+void JarvisLockRelease(int fd);
 
 // Strictly parse the course id of an EPITA repository url.
 static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
@@ -43,14 +38,11 @@ static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
             if (bimester != NULL)
                 *bimester = num_bimester;
 
-            if (stubborn != NULL && stubborn_size >= 4)
+            // Core of the nomenclature, kept as is (ex : 205-p-05)
+            if (stubborn != NULL && stubborn_size >= 10)
             {
-                size_t k = 0;
-                stubborn[k++] = (char)toupper((unsigned char)p[5]);
-                if (p[7] != '0')
-                    stubborn[k++] = p[7];
-                stubborn[k++] = p[8];
-                stubborn[k] = '\0';
+                snprintf(stubborn, stubborn_size, "%c%c%c-%c-%c%c", p[1], p[2],
+                         p[3], (char)tolower((unsigned char)p[5]), p[7], p[8]);
             }
             return EXIT_SUCCESS;
         }
@@ -79,7 +71,7 @@ int main(int argc, char *argv[])
         return EXIT_SUCCESS;
     }
 
-    if (__SameStr(argv[1], "current"))
+    if (IsCurrentKeyword(argv[1]))
     {
         // Get the current repository
         current_repo_url = GetCurrentRepo();
@@ -294,8 +286,14 @@ int main(int argc, char *argv[])
                  "git -C \"%s\" submodule add --force \"%s\"",
                  main_folder_path, argv[1]);
 
+        // Several clones may run at the same time ("jarvis fill") : only one
+        // at a time can touch the index and .gitmodules of the root repository
+        int git_lock = JarvisLockAcquire("git.lock");
+        int clone_status = system(command_clone);
+        JarvisLockRelease(git_lock);
+
         // Check if the clone is empty
-        if (system(command_clone))
+        if (clone_status)
         {
             // Handle error in previous execution
             if (access(repo_path, F_OK) == 0)
@@ -323,15 +321,26 @@ int main(int argc, char *argv[])
     // Make a choice if the repo is already filled
     if (repo_exists_or_filled)
     {
-        UiQuestion("What should be done ?");
+        // "jarvis fill" clones many repositories : no question, the content
+        // of a repository that is not empty is never changed
+        int choice = 1;
+        if (getenv("JARVIS_FILL") == NULL)
+        {
+            UiQuestion("What should be done ?");
 
-        const char *choices[] = {
-            "Add the tree structure missing files/folders.",
-            "Do not change the content of the repo.",
-            "Erase the repo content and create the expected tree structure."
-        };
+            const char *choices[] = {
+                "Add the tree structure missing files/folders.",
+                "Do not change the content of the repo.",
+                "Erase the repo content and create the expected tree "
+                "structure."
+            };
 
-        switch (ChoiceMCQ(choices, 3))
+            choice = ChoiceMCQ(choices, 3);
+        }
+        else
+            UiInfo("This repository is not empty, its content is kept.");
+
+        switch (choice)
         {
         case 0:
             AddGivenFilesUsefulParts(repo_path, pid_get_given_files);
@@ -401,7 +410,8 @@ int main(int argc, char *argv[])
     free(main_folder_path);
 
     // Push the repos (parent & child (if necessary))
-    pid_t pid_push_root = fork();
+    // ("jarvis fill" pushes the root repository once, after all the clones)
+    pid_t pid_push_root = getenv("JARVIS_FILL") != NULL ? -2 : fork();
     if (pid_push_root == 0)
     {
         char *repo_name;
@@ -417,10 +427,11 @@ int main(int argc, char *argv[])
     }
     else
     {
-        int result_child;
+        int result_child = 0;
         int result_push = PushRepo(repo_path, "Tree structure", NULL);
 
-        waitpid(pid_push_root, &result_child, 0);
+        if (pid_push_root > 0)
+            waitpid(pid_push_root, &result_child, 0);
 
         // Clone case
         if (result_child == 2)
@@ -603,11 +614,6 @@ int __RenameRepo(char *repo_path, char *repo_name)
     if ((path = getcwd(NULL, 0)) == NULL)
         errx(EXIT_FAILURE, "ERROR Impossible to get the current repository");
 
-    // // Execute rename
-    // if (system(rename_command))
-    //     errx(EXIT_FAILURE, "ERROR Impossible to rename the repo folder");
-
-    /// ----- TODO REANEME NE FONCTIONNE PAS
     char *root_folder;
     if (ReadRootPath(&root_folder))
         errx(EXIT_FAILURE, "ERROR Impossible to find the root repo");
@@ -648,7 +654,10 @@ int __RenameRepo(char *repo_path, char *repo_name)
              root_folder, rel_repo_path, final_dest, rel_repo_path, final_dest,
              final_dest);
 
-    if (system(rename_command))
+    int rename_lock = JarvisLockAcquire("git.lock");
+    int rename_status = system(rename_command);
+    JarvisLockRelease(rename_lock);
+    if (rename_status)
         errx(EXIT_FAILURE, "ERROR Impossible to rename the git repo folder");
 
     // ---- END TODO
@@ -692,11 +701,27 @@ char **__GetRelavitvePath(char *repo_name, size_t *size)
     {
         // Impossible to deduce the semester/bimester : "Others" folder
         (*size) = 1;
-        relative_path[0] = strdup(OTHERS_FOLDER_NAME);
+        relative_path[0] = GetOthersFolderName();
         if (relative_path[0] == NULL)
         {
             free(relative_path);
             err(EXIT_FAILURE, "strdup");
+        }
+
+        // "jarvis fill" gives the project of the repository (ex :
+        // epita-prepa-computer-science) : <Others>/<project>/
+        const char *project = getenv("JARVIS_PROJECT");
+        if (project != NULL && project[0] != '\0' && project[0] != '.'
+            && strchr(project, '/') == NULL)
+        {
+            relative_path[1] = strdup(project);
+            if (relative_path[1] == NULL)
+            {
+                free(relative_path[0]);
+                free(relative_path);
+                err(EXIT_FAILURE, "strdup");
+            }
+            (*size) = 2;
         }
         return relative_path;
     }

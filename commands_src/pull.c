@@ -1,4 +1,5 @@
 #include "pull.h"
+#include "current_handling.h"
 
 int ReadRootPath(char **value);
 
@@ -12,7 +13,7 @@ int main(int argc, char *argv[])
     }
 
     // Case current: pull the repository saved as "current" in the logs
-    if (strcasecmp(argv[1], "current") == 0)
+    if (IsCurrentKeyword(argv[1]))
     {
         __PullCurrent();
         return EXIT_SUCCESS;

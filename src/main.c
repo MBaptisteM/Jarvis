@@ -67,7 +67,10 @@ int main(int argc, char *argv[])
                  argv[1]);
 
         if (access(command_path, X_OK) != 0)
-            errx(EXIT_FAILURE, "ERROR command %s not found", argv[1]);
+            errx(EXIT_FAILURE,
+                 "ERROR command %s not found\nHint: run 'jarvis help' to "
+                 "see available commands",
+                 argv[1]);
 
         execv(command_path, &argv[1]);
     }

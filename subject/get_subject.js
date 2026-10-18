@@ -9,6 +9,79 @@ function launchBrowser(options) {
   });
 }
 
+const USER_FIELDS = 'input[type="email"], input[name="username"], '
+  + 'input[name="login"], input[name="email"], input[name="loginfmt"], '
+  + 'input[autocomplete="username"], input#username, input[type="text"]';
+const PASSWORD_FIELDS = 'input[type="password"]';
+
+// First field of the page that matches the selector and is displayed
+async function firstVisible(page, selector) {
+  try {
+    for (const field of await page.locator(selector).all()) {
+      if (await field.isVisible())
+        return field;
+    }
+  } catch (error) {
+    // The page is navigating : nothing to see for now
+  }
+  return null;
+}
+
+// Fill the login form of the forge (single page or username then password).
+// Returns true when the forge is reached again, false when the password is
+// refused or the form is never found.
+async function consoleLogin(page, url, username, password) {
+  const forgeHost = new URL(url).host;
+  const onForge = () => new URL(page.url()).host === forgeHost;
+  const deadline = Date.now() + 90000;
+  let passwordSent = false;
+
+  while (Date.now() < deadline) {
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+
+    const passwordField = await firstVisible(page, PASSWORD_FIELDS);
+
+    if (!passwordField) {
+      if (onForge()) {
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        return true;
+      }
+
+      const userField = await firstVisible(page, USER_FIELDS);
+      if (userField) {
+        await userField.fill(username);
+        await userField.press('Enter');
+        await page.waitForTimeout(1500);
+      } else {
+        await page.waitForTimeout(500);
+      }
+      continue;
+    }
+
+    // The password is asked again after it was sent : it was refused
+    if (passwordSent) {
+      await page.waitForTimeout(1500);
+      if (await firstVisible(page, PASSWORD_FIELDS))
+        return false;
+      continue;
+    }
+
+    // Username and password on the same page
+    const userField = await firstVisible(page, USER_FIELDS);
+    if (userField && !(await userField.inputValue()))
+      await userField.fill(username);
+
+    await passwordField.fill(password);
+    await passwordField.press('Enter');
+    passwordSent = true;
+
+    await page.waitForURL((address) => address.host === forgeHost,
+      { timeout: 15000 }).catch(() => {});
+  }
+
+  return false;
+}
+
 (async () => {
   const mode = process.argv[2];
   const url = process.argv[3];
@@ -34,8 +107,9 @@ function launchBrowser(options) {
 
   // Start the Auth window
   if (mode === "auth") {
-    console.log("\n➡️  \x1b[1mPlease \x1b[32mconnect to your forge account.\x1b[0m");
-    console.log("➡️  \x1b[1mThen close the window.\x1b[0m");
+    // Jarvis shows the instructions (connect, then close the window) when it
+    // reads this line, just before the window opens
+    console.log("JARVIS_AUTH_WINDOW");
 
     const browser = await launchBrowser({ headless: false });
     const context = await browser.newContext();
@@ -50,6 +124,34 @@ function launchBrowser(options) {
       await browser.close();
       process.exit(0);
     });
+  }
+
+  // Sign in without any window : the username (line 1) and the password
+  // (line 2) are given on the standard input. Exit code : 0 success | 2 wrong
+  // credentials | 1 any other failure.
+  else if (mode === "auth-console") {
+    const lines = fs.readFileSync(0, 'utf-8').split('\n');
+    const username = (lines[0] ?? '').replace(/\r$/, '');
+    const password = (lines[1] ?? '').replace(/\r$/, '');
+    if (!username || !password) {
+      console.error("ERROR Missing username or password");
+      process.exit(1);
+    }
+
+    const browser = await launchBrowser({ headless: true });
+    let logged = false;
+    try {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+      logged = await consoleLogin(page, url, username, password);
+      if (logged)
+        await context.storageState({ path: auth_path });
+    } finally {
+      await browser.close();
+    }
+    process.exit(logged ? 0 : 2);
   }
 
   // Run and load the subject

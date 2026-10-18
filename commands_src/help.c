@@ -41,18 +41,22 @@ static const Command COMMANDS[] = {
       .usage = "jarvis auth",
       .summary = "Authenticate to your EPITA account.",
       .details =
-          "Opens a connection window and saves the connection cookies for the "
-          "next uses, then finds or clones the root repository. Close the "
-          "window once you are connected. The first call may install many "
-          "packages.",
-      .rows_title = "Arguments",
-      .rows = { { NULL, NULL } },
+          "Asks how you want to connect, saves the connection cookies for the "
+          "next uses, then finds or clones the root repository. With the "
+          "browser (default) a window opens, close it once you are connected. "
+          "With the console you type your username and password, and Jarvis "
+          "gets the cookies by itself (the password is never saved). The "
+          "first call may install many packages.",
+      .rows_title = "Choice",
+      .rows = { { "Browser", "Sign in on the forge in a window (default)." },
+                { "Console", "Type your username and password here." },
+                { NULL, NULL } },
       .examples = { "jarvis auth", NULL } },
 
     { .name = "clone",
       .shortcut = "c",
       .group = "Repositories",
-      .usage = "jarvis clone [all | current | <remote-repository>]",
+      .usage = "jarvis clone [all | current/c/cu/cur/curr | <remote-repository>]",
       .summary = "Clone a repository and build its tree structure.",
       .details =
           "Clones the repository, places it in the tree structure, creates "
@@ -61,17 +65,43 @@ static const Command COMMANDS[] = {
       .rows_title = "Arguments",
       .rows = { { "all", "Find or clone the root repository (same as no "
                          "argument)." },
-                { "current", "Pick one of your forge projects and clone it." },
+                { "current (c/cu/cur/curr)",
+                  "Pick one of your forge projects and clone it." },
                 { "<remote>", "Clone the specified remote repository." },
                 { NULL, NULL } },
       .examples = { "jarvis clone", "jarvis clone current",
                     "jarvis clone firstname.name@git.forge.epita.fr:p/...",
                     NULL } },
 
+    { .name = "fill",
+      .shortcut = "fl",
+      .group = "Repositories",
+      .usage = "jarvis fill [old | all | current/now | <project>]",
+      .summary = "Clone many repositories of the forge at once.",
+      .details =
+          "Reads your projects on the forge and clones every matching "
+          "repository like clone does, without any question. The repositories "
+          "already cloned are skipped, and the content of a repository that "
+          "is not empty is never changed. A repository whose course can't be "
+          "deduced goes in Others/<project>/ (ex : "
+          "Others/epita-prepa-computer-science/). The root repository is "
+          "pushed once at the end.",
+      .rows_title = "Arguments",
+      .rows = { { "old (anc/ancient/past)",
+                  "Every finished repository (default)." },
+                { "all", "Every repository, finished or not." },
+                { "current (now)", "Only the repositories that are not "
+                                   "finished." },
+                { "<project>", "Every repository listed on the page of this "
+                               "project." },
+                { NULL, NULL } },
+      .examples = { "jarvis fill", "jarvis fill all", "jarvis fill now",
+                    "jarvis fill epita-prepa-computer-science", NULL } },
+
     { .name = "pull",
       .shortcut = "pl",
       .group = "Repositories",
-      .usage = "jarvis pull [all | current | <repository>]",
+      .usage = "jarvis pull [all | current/c/cu/cur/curr | <repository>]",
       .summary = "Pull and update repositories.",
       .details =
           "Updates the whole tree, a specific repository, or the current one. "
@@ -79,7 +109,7 @@ static const Command COMMANDS[] = {
       .rows_title = "Arguments",
       .rows = { { "all", "Pull the root repository and every repository of "
                          "the tree (default)." },
-                { "current", "Pull the current repository." },
+                { "current (c/cu/cur/curr)", "Pull the current repository." },
                 { "<repository>", "Pull this repository (if already "
                                   "cloned)." },
                 { NULL, NULL } },
@@ -89,7 +119,7 @@ static const Command COMMANDS[] = {
     { .name = "push",
       .shortcut = "ps",
       .group = "Repositories",
-      .usage = "jarvis push [root | current | <path>]",
+      .usage = "jarvis push [root | current/c/cu/cur/curr | <path>]",
       .summary = "Commit and push a repository and the root repository.",
       .details =
           "Adds, commits and pushes a repository, and updates the root "
@@ -97,7 +127,7 @@ static const Command COMMANDS[] = {
           "automatically unless one is given.",
       .rows_title = "Arguments",
       .rows = { { "root", "Push only the root repository." },
-                { "current", "Push the current repository." },
+                { "current (c/cu/cur/curr)", "Push the current repository." },
                 { "<path>", "Push the repository at this path (default: the "
                             "current folder)." },
                 { NULL, NULL } },
@@ -107,13 +137,14 @@ static const Command COMMANDS[] = {
     { .name = "find",
       .shortcut = "f",
       .group = "Navigation",
-      .usage = "jarvis find [root | current | <repository> | <keyword>]",
+      .usage = "jarvis find [root | current/c/cu/cur/curr | <repository> | "
+               "<keyword>]",
       .summary = "Find the path of specific repositories.",
       .details = "Prints the local path of the repositories matching the "
                  "request, without touching them.",
       .rows_title = "Arguments",
       .rows = { { "root", "Find the root repository (default)." },
-                { "current", "Find the current repository." },
+                { "current (c/cu/cur/curr)", "Find the current repository." },
                 { "<repo url>", "Find the local clone of this remote "
                                 "repository." },
                 { "<keyword>", "Find the repositories whose title contains "
@@ -126,7 +157,8 @@ static const Command COMMANDS[] = {
     { .name = "go",
       .shortcut = "g",
       .group = "Navigation",
-      .usage = "jarvis go [root | current | <repository> | <keyword>]",
+      .usage = "jarvis go [root | current/c/cu/cur/curr | <repository> | "
+               "<keyword>]",
       .summary = "Go to a repository (like find, but moves you there).",
       .details =
           "Finds a repository like find, then changes your current shell's "
@@ -134,7 +166,7 @@ static const Command COMMANDS[] = {
           "previous directory. If several folders match, a choice is proposed.",
       .rows_title = "Arguments",
       .rows = { { "root", "Go to the root repository (default)." },
-                { "current", "Go to the current repository." },
+                { "current (c/cu/cur/curr)", "Go to the current repository." },
                 { "<repo url>", "Go to the local clone of this remote "
                                 "repository." },
                 { "<keyword>", "Go to a repository whose title contains this "
@@ -147,16 +179,21 @@ static const Command COMMANDS[] = {
       .shortcut = NULL,
       .group = "Organization",
       .usage = "jarvis custom",
-      .summary = "Customize the tree structure (layers, prefixes).",
+      .summary = "Customize the tree structure (layers, prefixes, Others).",
       .details =
           "Interactive menu, everything is chosen with the arrows and enter. "
-          "Quitting applies the changes to the repositories already cloned "
-          "(they are moved); Save also pushes the root repository.",
+          "The settings are stored in the .jarvis_config file of the root "
+          "repository (created with the default values if missing), so once "
+          "pushed and pulled every Jarvis of a project shares them. Quitting "
+          "applies the changes to the repositories already cloned (they are "
+          "moved); Save also pushes the root repository.",
       .rows_title = "Menu",
       .rows = { { "Layers", "Enable or disable Year, Semester and Bimester "
                             "folders (default: Semester and Bimester)." },
                 { "Prefixes", "Text written before the number (default: Y, S, "
                               "B)." },
+                { "Others", "Rename the folder used when the course can't "
+                            "be deduced (default: Others)." },
                 { "Reset", "Go back to the default organization." },
                 { "Save", "Apply the changes to the tree and push the root "
                           "repository." },

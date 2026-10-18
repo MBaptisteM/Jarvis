@@ -20,6 +20,9 @@
 #include "subject_handling.h"
 #include "tree_structure.h"
 #include "ui.h"
+#include "clone_root.h"
+#include "custom.h"
+#include "get_jarvis_paths.h"
 
 #define SEMESTER "S"
 #define BIMESTER "B"

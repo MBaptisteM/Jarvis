@@ -1,10 +1,5 @@
 #include "find.h"
 
-int ReadRootPath(char **value);
-size_t GetLayerFolders(int bimester, char **folders);
-
-#include <ctype.h>
-
 // Strictly parse the course id of an EPITA url (same rule as clone.c)
 static int __FindParseCourseId(const char *url, int *bimester, char *stubborn)
 {
@@ -67,7 +62,9 @@ static int __RelativeFolder(const char *url, char *out, size_t size)
     int num_bimester;
     if (__FindParseCourseId(url, &num_bimester, NULL) != 0)
     {
-        snprintf(out, size, "%s", "Others");
+        char *others = GetOthersFolderName();
+        snprintf(out, size, "%s", others);
+        free(others);
         return 1;
     }
 
@@ -107,7 +104,7 @@ int main(int argc, char *argv[])
     }
 
     // Case current: find the repository saved as "current" in the logs
-    if (strcasecmp(argv[1], "current") == 0)
+    if (IsCurrentKeyword(argv[1]))
     {
         __FindCurrent();
         return EXIT_SUCCESS;
@@ -344,7 +341,9 @@ void __ExtractRelativePath(char *url, char *semester_out, char *bimester_out)
     if (__FindParseCourseId(url, &num_bimester, NULL) != 0)
     {
         // Not deducible : the repo is in the "Others" folder (no bimester)
-        snprintf(semester_out, SIZE_OF_STRING, "%s", "Others");
+        char *others = GetOthersFolderName();
+        snprintf(semester_out, SIZE_OF_STRING, "%s", others);
+        free(others);
         bimester_out[0] = '\0';
         return;
     }

@@ -1,5 +1,11 @@
 #include <get_jarvis_paths.h>
 
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 // Get the commands_path depending on how the tool has been installed
 const char *GetCommandPath()
 {
@@ -26,6 +32,12 @@ const char *GetCommandPath()
 // Get the subject_path depending on how the tool has been installed
 const char *GetSubjectFolderPath()
 {
+    // "jarvis fill" gives every parallel clone its own working folder, so that
+    // they do not overwrite each other's subject.html / given files
+    const char *override_path = getenv("JARVIS_SUBJECT_DIR");
+    if (override_path != NULL && override_path[0] != '\0')
+        return override_path;
+
     char *home_path = NULL;
     if (GetDotJarvisPath(&home_path))
     {
@@ -187,38 +199,302 @@ const char *GetDefaultLayerPrefix(const char *layer)
 #endif
 }
 
+// Tree configuration : stored in <root repository>/.jarvis_config
+#define JARVIS_CONFIG_FILE_NAME ".jarvis_config"
+#define DEFAULT_OTHERS_NAME "Others"
+#define CONFIG_PREFIX_MAX 32
+#define CONFIG_OTHERS_MAX 64
+
+typedef struct
+{
+    int enabled[3];
+    char prefix[3][CONFIG_PREFIX_MAX + 1];
+    char others[CONFIG_OTHERS_MAX + 1];
+} JarvisConfig;
+
+static const char *CONFIG_LAYERS[3] = { "year", "semester", "bimester" };
+
+static JarvisConfig jarvis_config;
+static int jarvis_config_loaded = 0;
+
+static int __ConfigLayerIndex(const char *layer)
+{
+    for (int i = 0; i < 3; i++)
+        if (strcmp(layer, CONFIG_LAYERS[i]) == 0)
+            return i;
+    return -1;
+}
+
+static int __ConfigValidPrefix(const char *prefix)
+{
+    size_t length = strlen(prefix);
+    if (length == 0 || length > CONFIG_PREFIX_MAX || prefix[0] == '.')
+        return 0;
+    for (size_t i = 0; i < length; i++)
+    {
+        unsigned char c = (unsigned char)prefix[i];
+        if (!isalnum(c) && c != '-' && c != '_' && c != '.')
+            return 0;
+    }
+    return 1;
+}
+
+// The name of the "Others" folder is a single folder name
+static int __ConfigValidOthers(const char *name)
+{
+    size_t length = strlen(name);
+    if (length == 0 || length > CONFIG_OTHERS_MAX || name[0] == '.')
+        return 0;
+    for (size_t i = 0; i < length; i++)
+    {
+        unsigned char c = (unsigned char)name[i];
+        if (c == '/' || c == '\\' || c == '"' || c == '\'' || c == '='
+            || iscntrl(c))
+            return 0;
+    }
+    return 1;
+}
+
+static void __ConfigDefaults(JarvisConfig *config)
+{
+    for (int i = 0; i < 3; i++)
+    {
+        config->enabled[i] = i != 0;
+        snprintf(config->prefix[i], sizeof(config->prefix[i]), "%s",
+                 GetDefaultLayerPrefix(CONFIG_LAYERS[i]));
+    }
+    snprintf(config->others, sizeof(config->others), "%s", DEFAULT_OTHERS_NAME);
+}
+
+// Path of the config file (malloc'd), NULL when the root repository is unknown
+static char *__ConfigPath(void)
+{
+    char *root = NULL;
+    if (ReadRootPath(&root) != EXIT_SUCCESS || root == NULL)
+        return NULL;
+
+    size_t length = strlen(root);
+    while (length > 1 && root[length - 1] == '/')
+        root[--length] = '\0';
+
+    // The saved path may be the parent of the root repository
+    if (!__HasGitFolder(root))
+    {
+        size_t nested_size = length + strlen(REPO_NAME) + 2;
+        char *nested = malloc(nested_size);
+        if (nested == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(nested, nested_size, "%s/%s", root, REPO_NAME);
+        if (__HasGitFolder(nested))
+        {
+            free(root);
+            root = nested;
+            length = strlen(root);
+        }
+        else
+            free(nested);
+    }
+
+    size_t size = length + sizeof("/" JARVIS_CONFIG_FILE_NAME) + 1;
+    char *path = malloc(size);
+    if (path == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(path, size, "%s/%s", root, JARVIS_CONFIG_FILE_NAME);
+    free(root);
+    return path;
+}
+
+// Write the config (atomically). 0 on success.
+static int __ConfigWrite(const char *path, const JarvisConfig *config)
+{
+    size_t tmp_size = strlen(path) + sizeof(".tmp");
+    char *tmp = malloc(tmp_size);
+    if (tmp == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(tmp, tmp_size, "%s.tmp", path);
+
+    FILE *file = fopen(tmp, "w");
+    if (file == NULL)
+    {
+        free(tmp);
+        return EXIT_FAILURE;
+    }
+
+    int failed = 0;
+    failed |= fprintf(file,
+                      "# Jarvis tree configuration (shared with every Jarvis "
+                      "using this root repository).\n"
+                      "# Edit it with 'jarvis custom'.\n") < 0;
+    for (int i = 0; i < 3; i++)
+        failed |= fprintf(file, "layer_%s = %s\n", CONFIG_LAYERS[i],
+                          config->enabled[i] ? "on" : "off") < 0;
+    for (int i = 0; i < 3; i++)
+        failed |= fprintf(file, "prefix_%s = %s\n", CONFIG_LAYERS[i],
+                          config->prefix[i]) < 0;
+    failed |= fprintf(file, "others_name = %s\n", config->others) < 0;
+    failed |= fclose(file) != 0;
+
+    if (!failed && rename(tmp, path) != 0)
+        failed = 1;
+    if (failed)
+        remove(tmp);
+    free(tmp);
+    return failed ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+static char *__ConfigTrim(char *str)
+{
+    while (isspace((unsigned char)*str))
+        str++;
+    size_t length = strlen(str);
+    while (length > 0 && isspace((unsigned char)str[length - 1]))
+        str[--length] = '\0';
+    return str;
+}
+
+// Apply one "key = value" to a config. 0 if it was accepted.
+static int __ConfigApply(JarvisConfig *config, const char *key,
+                         const char *value)
+{
+    if (strncmp(key, "layer_", 6) == 0)
+    {
+        int index = __ConfigLayerIndex(key + 6);
+        if (index < 0 || (strcmp(value, "on") != 0 && strcmp(value, "off") != 0))
+            return EXIT_FAILURE;
+        config->enabled[index] = strcmp(value, "on") == 0;
+        return EXIT_SUCCESS;
+    }
+    if (strncmp(key, "prefix_", 7) == 0)
+    {
+        int index = __ConfigLayerIndex(key + 7);
+        if (index < 0 || !__ConfigValidPrefix(value))
+            return EXIT_FAILURE;
+        snprintf(config->prefix[index], sizeof(config->prefix[index]), "%s",
+                 value);
+        return EXIT_SUCCESS;
+    }
+    if (strcmp(key, "others_name") == 0)
+    {
+        if (!__ConfigValidOthers(value))
+            return EXIT_FAILURE;
+        snprintf(config->others, sizeof(config->others), "%s", value);
+        return EXIT_SUCCESS;
+    }
+    return EXIT_FAILURE;
+}
+
+// Load the config once per process. Created with the default values when the
+// file does not exist. Without a root repository, the defaults are used (and
+// nothing is cached, so the file is read as soon as the root exists).
+static void __ConfigLoad(void)
+{
+    if (jarvis_config_loaded)
+        return;
+
+    JarvisConfig config;
+    __ConfigDefaults(&config);
+
+    char *path = __ConfigPath();
+    if (path == NULL)
+    {
+        jarvis_config = config;
+        return;
+    }
+
+    FILE *file = fopen(path, "r");
+    if (file == NULL)
+    {
+        if (access(path, F_OK) != 0)
+            __ConfigWrite(path, &config);
+    }
+    else
+    {
+        char *line = NULL;
+        size_t capacity = 0;
+        while (getline(&line, &capacity, file) >= 0)
+        {
+            char *content = __ConfigTrim(line);
+            if (content[0] == '#' || content[0] == '\0')
+                continue;
+
+            char *equal = strchr(content, '=');
+            if (equal == NULL)
+                continue;
+            *equal = '\0';
+            __ConfigApply(&config, __ConfigTrim(content),
+                          __ConfigTrim(equal + 1));
+        }
+        free(line);
+        fclose(file);
+    }
+
+    free(path);
+    jarvis_config = config;
+    jarvis_config_loaded = 1;
+}
+
+// Make sure the config file exists in the root repository (created with the
+// default values otherwise)
+void EnsureConfigFile(void)
+{
+    __ConfigLoad();
+}
+
+// Change one setting ("layer_<layer>" = on/off, "prefix_<layer>" = text,
+// "others_name" = folder name) and save it. 0 on success.
+int SetConfigValue(const char *key, const char *value)
+{
+    __ConfigLoad();
+
+    char *path = __ConfigPath();
+    if (path == NULL)
+        return EXIT_FAILURE;
+
+    JarvisConfig updated = jarvis_config;
+    int result = __ConfigApply(&updated, key, value);
+    if (result == EXIT_SUCCESS)
+        result = __ConfigWrite(path, &updated);
+    free(path);
+
+    if (result == EXIT_SUCCESS)
+    {
+        jarvis_config = updated;
+        jarvis_config_loaded = 1;
+    }
+    return result;
+}
+
 // Is this layer used to classify the repositories ?
 int IsLayerEnabled(const char *layer)
 {
-    int enabled = strcmp(layer, "year") != 0;
+    __ConfigLoad();
 
-    char key[64];
-    snprintf(key, sizeof(key), "layer_%s", layer);
-
-    char *value = NULL;
-    if (ReadInfo(key, &value) == EXIT_SUCCESS && value != NULL)
-        enabled = strcmp(value, "on") == 0;
-    free(value);
-
-    return enabled;
+    int index = __ConfigLayerIndex(layer);
+    return index < 0 ? 0 : jarvis_config.enabled[index];
 }
 
 // Folder prefix of a layer (malloc'd, the caller must free it)
 char *GetLayerPrefix(const char *layer)
 {
-    char key[64];
-    snprintf(key, sizeof(key), "prefix_%s", layer);
+    __ConfigLoad();
 
-    char *value = NULL;
-    if (ReadInfo(key, &value) != EXIT_SUCCESS || value == NULL
-        || value[0] == '\0')
-    {
-        free(value);
-        value = strdup(GetDefaultLayerPrefix(layer));
-        if (value == NULL)
-            err(EXIT_FAILURE, "strdup");
-    }
+    int index = __ConfigLayerIndex(layer);
+    char *value = strdup(index < 0 ? GetDefaultLayerPrefix(layer)
+                                   : jarvis_config.prefix[index]);
+    if (value == NULL)
+        err(EXIT_FAILURE, "strdup");
+    return value;
+}
 
+// Name of the folder used when the course can't be deduced ("Others" by
+// default), malloc'd, the caller must free it
+char *GetOthersFolderName(void)
+{
+    __ConfigLoad();
+
+    char *value = strdup(jarvis_config.others);
+    if (value == NULL)
+        err(EXIT_FAILURE, "strdup");
     return value;
 }
 

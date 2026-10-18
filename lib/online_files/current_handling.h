@@ -15,6 +15,7 @@ void *ThreadExtractPages(void *arg);
 void *ThreadExtractURL(void *arg);
 
 char *GetCurrentRepo();
+int IsCurrentKeyword(const char *argument);
 
 int PageDownload(char *url, char *file_name);
 char **ExtractProjects(char *file_path, int *size);

@@ -1,30 +1,26 @@
 #include "custom.h"
 
-#include <ctype.h>
-#include <dirent.h>
-#include <err.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include "TPs_handler.h"
-
-int ReadRootPath(char **value);
-size_t GetLayerFolders(int bimester, char **folders);
-
 #define PREFIX_MAX_LENGTH 32
+#define OTHERS_MAX_LENGTH 64
 
 static const char *LAYERS[3] = { "year", "semester", "bimester" };
 static const char *LABELS[3] = { "Year", "Semester", "Bimester" };
 
+// Name of the "Others" folder as it is on disk (read when the command starts,
+// updated once the tree has been reorganized), so that a rename moves the
+// repositories of the old folder
+static char *others_on_disk = NULL;
+
+static int __MatchLayer(const char *component, size_t length, int *layer,
+                        long *number);
+
+// Settings are stored in <root repository>/.jarvis_config (shared by every
+// Jarvis using this root repository once it is pushed)
 static void __Save(const char *key, const char *value)
 {
-    if (WriteInfo((char *)key, (char *)value) != EXIT_SUCCESS)
-        errx(EXIT_FAILURE, "ERROR Impossible to save the setting %s", key);
+    if (SetConfigValue(key, value) != EXIT_SUCCESS)
+        errx(EXIT_FAILURE,
+             "ERROR Impossible to save the setting %s in .jarvis_config", key);
 }
 
 static void __SetLayerEnabled(const char *layer, int enabled)
@@ -80,10 +76,12 @@ static void __PrintCurrent(void)
     }
     strncat(layout, "<repository>", sizeof(layout) - strlen(layout) - 1);
 
+    char *others = GetOthersFolderName();
     UiPanel(stdout, UI_INFO, "Current organization",
-            "%s\nEPITA-TPs/Others/<repository>  (when the course can't be "
+            "%s\nEPITA-TPs/%s/<repository>  (when the course can't be "
             "deduced)",
-            layout);
+            layout, others);
+    free(others);
 
     if (count == 0)
         UiWarning("All the layers are disabled : the repositories go directly "
@@ -161,6 +159,71 @@ static int __AskPrefix(int layer_index)
     return 1;
 }
 
+// The name of the "Others" folder is a single folder name, and must not be
+// mistaken for a layer folder (ex : S1)
+static int __IsValidOthersName(const char *name)
+{
+    size_t length = strlen(name);
+    if (length == 0 || length > OTHERS_MAX_LENGTH || name[0] == '.')
+        return 0;
+
+    for (size_t i = 0; i < length; i++)
+    {
+        unsigned char c = (unsigned char)name[i];
+        if (c == '/' || c == '\\' || c == '"' || c == '\'' || c == '='
+            || iscntrl(c))
+            return 0;
+    }
+
+    int layer;
+    long number;
+    return !__MatchLayer(name, length, &layer, &number);
+}
+
+static int __AskOthers(void)
+{
+    char *current = GetOthersFolderName();
+
+    UiQuestion("Name of the folder used when the course can't be deduced "
+               "(now \"%s\")\n"
+               "Type the new name, empty to cancel.",
+               current);
+
+    char *name = __ReadLine("> ");
+    if (name == NULL)
+    {
+        UiInfo("Nothing changed.");
+        free(current);
+        return 0;
+    }
+
+    if (!__IsValidOthersName(name))
+    {
+        UiError("Invalid name : use 1 to %d characters, no '/', '\\', quotes "
+                "or '=', not starting with a dot, and not looking like a "
+                "layer folder (ex : S1).",
+                OTHERS_MAX_LENGTH);
+        free(name);
+        free(current);
+        return 0;
+    }
+
+    if (strcmp(name, current) == 0)
+    {
+        UiInfo("Nothing changed.");
+        free(name);
+        free(current);
+        return 0;
+    }
+
+    __Save("others_name", name);
+    UiSuccess("The repositories without a known course will now go in %s.",
+              name);
+    free(name);
+    free(current);
+    return 1;
+}
+
 static int __PrefixesMenu(void)
 {
     int changed = 0;
@@ -234,7 +297,7 @@ static int __Reset(void)
 
     const char *options[] = { "No, keep my settings",
                               "Yes, reset (Semester and Bimester only, "
-                              "default prefixes)" };
+                              "default prefixes, Others folder)" };
     if (ChoiceMCQ(options, 2) != 1)
     {
         UiInfo("Nothing changed.");
@@ -246,6 +309,7 @@ static int __Reset(void)
         __SetLayerEnabled(LAYERS[i], i != 0);
         __SetLayerPrefix(LAYERS[i], GetDefaultLayerPrefix(LAYERS[i]));
     }
+    __Save("others_name", "Others");
 
     UiSuccess("Default organization restored.");
     return 1;
@@ -687,6 +751,61 @@ static void __CollectSubmodules(const char *root, PathList *list)
     waitpid(pid, &status, 0);
 }
 
+// A repository sitting in the previous "Others" folder goes in the new one.
+// Returns the new parent folder (malloc'd), NULL if the repository is not
+// concerned.
+// A repository is either directly in the folder (Others/<repo>) or in the
+// folder of its project (Others/<project>/<repo>, made by "jarvis fill").
+static char *__OthersTarget(const char *root, const char *repo)
+{
+    if (others_on_disk == NULL)
+        return NULL;
+
+    char *old_parent = __JoinPath(root, others_on_disk);
+    size_t length = strlen(old_parent);
+
+    int inside = 0;
+    const char *project = NULL;
+    size_t project_length = 0;
+    if (strncmp(repo, old_parent, length) == 0 && repo[length] == '/')
+    {
+        const char *rest = repo + length + 1;
+        const char *slash = strchr(rest, '/');
+        if (slash == NULL)
+            inside = 1;
+        else if (strchr(slash + 1, '/') == NULL)
+        {
+            inside = 1;
+            project = rest;
+            project_length = (size_t)(slash - rest);
+        }
+    }
+    free(old_parent);
+
+    char *current = GetOthersFolderName();
+    char *target = NULL;
+    if (inside && strcmp(current, others_on_disk) != 0)
+    {
+        char *others = __JoinPath(root, current);
+        if (project == NULL)
+            target = others;
+        else
+        {
+            char *project_name = malloc(project_length + 1);
+            if (project_name == NULL)
+                err(EXIT_FAILURE, "malloc");
+            memcpy(project_name, project, project_length);
+            project_name[project_length] = '\0';
+
+            target = __JoinPath(others, project_name);
+            free(project_name);
+            free(others);
+        }
+    }
+    free(current);
+    return target;
+}
+
 // Move every cloned repository to the place given by the current layers.
 // Returns how many repositories were moved, -1 on a fatal error.
 static int __ApplyOrganization(void)
@@ -729,26 +848,35 @@ static int __ApplyOrganization(void)
         if (bimester < 1)
             bimester = __InferBimester(root, repo);
 
-        // Not deducible (Others folder, classic clone...) : left untouched
+        char *target_parent = NULL;
         if (bimester < 1)
         {
-            __Report(&report, &report_size,
-                     "\nskipped (Others folder or unknown layout) : %s", repo);
-            continue;
+            // Not deducible (Others folder, classic clone...) : only moved
+            // when the "Others" folder has been renamed
+            target_parent = __OthersTarget(root, repo);
+            if (target_parent == NULL)
+            {
+                __Report(&report, &report_size,
+                         "\nskipped (Others folder or unknown layout) : %s",
+                         repo);
+                continue;
+            }
         }
-
-        char *target_parent = strdup(root);
-        if (target_parent == NULL)
-            err(EXIT_FAILURE, "strdup");
-
-        char *folders[3];
-        size_t folder_count = GetLayerFolders(bimester, folders);
-        for (size_t j = 0; j < folder_count; j++)
+        else
         {
-            char *next = __JoinPath(target_parent, folders[j]);
-            free(target_parent);
-            free(folders[j]);
-            target_parent = next;
+            target_parent = strdup(root);
+            if (target_parent == NULL)
+                err(EXIT_FAILURE, "strdup");
+
+            char *folders[3];
+            size_t folder_count = GetLayerFolders(bimester, folders);
+            for (size_t j = 0; j < folder_count; j++)
+            {
+                char *next = __JoinPath(target_parent, folders[j]);
+                free(target_parent);
+                free(folders[j]);
+                target_parent = next;
+            }
         }
 
         const char *name = strrchr(repo, '/');
@@ -816,6 +944,10 @@ static int __ApplyOrganization(void)
     free(current);
     free(root);
 
+    // The "Others" folder on disk now follows the configuration
+    free(others_on_disk);
+    others_on_disk = GetOthersFolderName();
+
     if (moved == 0)
         __Report(&report, &report_size,
                  "\n\nNothing to move, the tree already matches the "
@@ -855,8 +987,10 @@ int main(int argc, char *argv[])
     if (argc > 1)
         errx(EXIT_FAILURE, "Usage: jarvis custom");
 
-    // Reading a setting creates the info file when it doesn't exist yet
-    IsLayerEnabled("year");
+    // Reading the settings creates .jarvis_config (default values) in the
+    // root repository when it doesn't exist yet
+    EnsureConfigFile();
+    others_on_disk = GetOthersFolderName();
 
     UiPanel(stdout, UI_INFO, "Custom",
             "Customize the tree structure of your repositories");
@@ -871,13 +1005,14 @@ int main(int argc, char *argv[])
         const char *options[] = {
             "Layers : enable or disable Year / Semester / Bimester folders",
             "Prefixes : choose the text before the number (ex : S<n>)",
+            "Others : rename the folder used when the course is unknown",
             "Reset : go back to the default organization",
             "Save : apply to the tree and push",
             "Quit : apply to the tree (no push)"
         };
 
         int updated = 0;
-        switch (ChoiceMCQ(options, 5))
+        switch (ChoiceMCQ(options, 6))
         {
         case 0:
             updated = __LayersMenu();
@@ -886,9 +1021,12 @@ int main(int argc, char *argv[])
             updated = __PrefixesMenu();
             break;
         case 2:
-            updated = __Reset();
+            updated = __AskOthers();
             break;
         case 3:
+            updated = __Reset();
+            break;
+        case 4:
             // Save : apply the organization, then push the root repository
             if (__Finish(1) == EXIT_SUCCESS)
                 changed = 0;

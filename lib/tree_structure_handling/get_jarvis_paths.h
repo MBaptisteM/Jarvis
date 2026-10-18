@@ -16,6 +16,11 @@ const char *GetSubjectFolderPath();
 char *GetInfoPath();
 char *GetTPsPath();
 int GetDotJarvisPath(char **path);
+size_t GetLayerFolders(int bimester, char **folders);
+int ReadRootPath(char **value);
+int SetConfigValue(const char *key, const char *value);
+char *GetOthersFolderName(void);
+void EnsureConfigFile(void);
 
 int __GetRootPath(char **path);
 int __GetLocalPath(char **path);

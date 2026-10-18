@@ -167,6 +167,9 @@ char *GetOrCreateRepoRoot()
         fputs("\n**/.git\n", f);
         fclose(f);
 
+        // .jarvis_config (tree configuration, created with the default values)
+        EnsureConfigFile();
+
         // Add files
         if (system("find . "
                    "-path './.git' -prune -o "
@@ -260,11 +263,7 @@ void CleanupOnExit()
 }
 
 // Shell script (run from the repository root) that repairs gitlinks present in
-// the index but missing from .gitmodules. "git add -A" creates such gitlinks
-// as soon as a nested repo has a commit (ex : after the first push of a
-// freshly cloned TP), and every "git submodule" command then fails with "No
-// url found for submodule path". A nested repo that has a remote gets
-// registered in .gitmodules, anything else is removed from the index.
+// the index but missing from .gitmodules.
 static const char *HEAL_SUBMODULES_SCRIPT =
     "git ls-files --stage | awk -F'\\t' '$1 ~ /^160000/ {print $2}' | "
     "while IFS= read -r p; do "
@@ -293,6 +292,10 @@ int AddRepoRoot()
     if (chdir(path) != 0)
         err(EXIT_FAILURE, "chdir(%s)", path);
     free(path);
+
+    // The tree configuration is shared through the root repository : make
+    // sure it exists (default values) so that it is pushed with the rest
+    EnsureConfigFile();
 
     // // Rename .git
     // if (system(
@@ -323,12 +326,16 @@ int AddRepoRoot()
     // Add
     int add_result = system("git add -A -- . ':(exclude)**/.git.jarvis-tmp' ':(exclude)**/.git.jarvis-tmp/**'");
     int restore_result = system(restore_command);
+    // Always track the config, even if a .gitignore pattern matches it
+    int config_result = system(
+        "test ! -e .jarvis_config || git add -f -- .jarvis_config "
+        "> /dev/null 2>&1");
     int stale_metadata_result =
         system("git ls-files -z -- ':(glob)**/.git.jarvis-tmp' | xargs -0 -r git add -u --");
     // Every nested repo with a commit must be declared in .gitmodules
     int heal_result = system(HEAL_SUBMODULES_SCRIPT);
-    if (add_result != 0 || restore_result != 0 || stale_metadata_result != 0
-        || heal_result != 0)
+    if (add_result != 0 || restore_result != 0 || config_result != 0
+        || stale_metadata_result != 0 || heal_result != 0)
     {
         UiError("Impossible to add elements in the root repo");
         // RestoreGitFolders();
