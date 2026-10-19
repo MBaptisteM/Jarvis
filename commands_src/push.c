@@ -1,5 +1,57 @@
 #include "push.h"
-#include "current_handling.h"
+
+
+int ReadRootPath(char **value);
+int PushRepoStatus(char *repo_path, char *commit_name, char *tag);
+int PushRepoRootStatus(char *commit_name, int staging_failed);
+
+static int __StatusToExit(int status)
+{
+    return status == JARVIS_PUSH_PUSHED || status == JARVIS_PUSH_NOTHING
+        ? EXIT_SUCCESS
+        : EXIT_FAILURE;
+}
+
+static const char *__StatusLabel(int status)
+{
+    switch (status)
+    {
+    case JARVIS_PUSH_PUSHED:
+        return "pushed";
+    case JARVIS_PUSH_NOTHING:
+        return "nothing to push (already up to date)";
+    case JARVIS_PUSH_PARTIAL:
+        return "pushed, but incomplete";
+    default:
+        return "NOT pushed";
+    }
+}
+
+// Stage, commit and push the root repository. A staging problem is reported
+// but does not prevent pushing what could be staged.
+static int __PushRootOnly(char *commit_name)
+{
+    int staging_failed = AddRepoRoot() != EXIT_SUCCESS;
+    return PushRepoRootStatus(commit_name, staging_failed);
+}
+
+// Is this folder the root repository itself ?
+static int __IsRootPath(const char *path)
+{
+    char *root = NULL;
+    if (ReadRootPath(&root) != EXIT_SUCCESS || root == NULL)
+        return 0;
+
+    char *real_path = realpath(path, NULL);
+    char *real_root = realpath(root, NULL);
+    int same = real_path != NULL && real_root != NULL
+        && strcmp(real_path, real_root) == 0;
+
+    free(real_path);
+    free(real_root);
+    free(root);
+    return same;
+}
 
 int main(int argc, char *argv[])
 {
@@ -59,11 +111,8 @@ int main(int argc, char *argv[])
 
     // Push only root if path == root
     if (path != NULL && strcasecmp(path, "root") == 0)
-    {
-        return AddRepoRoot()
-            || PushRepoRoot(name_commit != NULL ? name_commit : "Manual push");
-        return EXIT_SUCCESS;
-    }
+        return __StatusToExit(__PushRootOnly(
+            name_commit != NULL ? name_commit : "Manual push"));
 
     // Get the path
     char path_allocated = 0;
@@ -122,6 +171,17 @@ int main(int argc, char *argv[])
         path_allocated = 1;
     }
 
+    // Run from the root repository itself : it is pushed on its own (trying to
+    // "git add" it as a normal repository fails on the nested repositories)
+    if (__IsRootPath(path))
+    {
+        int status = __PushRootOnly(
+            name_commit != NULL ? name_commit : "Manual push");
+        if (path_allocated)
+            free(path);
+        return __StatusToExit(status);
+    }
+
     // Get the tag and the name_commit
     char name_commit_allocated = 0;
     if (tag != NULL)
@@ -141,32 +201,14 @@ int main(int argc, char *argv[])
     snprintf(name_commit_root, sizeof(name_commit_root), "%s | %s", name_commit,
              repo_name);
 
-    // If repo root already created add
-    int result_add = -1;
-    if (system("git remote get-url origin > /dev/null 2>&1") == 0)
-        result_add = AddRepoRoot();
+    // 1. The repository itself. One after the other (not at the same time) :
+    // the root repository records the new commit of the repository, and
+    // hiding the .git of an empty nested repository while it is being pushed
+    // would break it.
+    int repo_status = PushRepoStatus(path, name_commit, tag);
 
-    // Push root and local repo at the same time
-    pid_t pid_push_root = fork();
-    if (pid_push_root == 0)
-    {
-        if (result_add == -1)
-        {
-            char *root_path = GetOrCreateRepoRoot();
-            free(root_path);
-        }
-        else if (result_add == EXIT_SUCCESS)
-            exit(PushRepoRoot(name_commit_root));
-
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        if (PushRepo(path, name_commit, tag))
-        {
-        }
-        waitpid(pid_push_root, NULL, 0);
-    }
+    // 2. The root repository, even if the first step failed
+    int root_status = __PushRootOnly(name_commit_root);
 
     if (path_allocated)
         free(path);
@@ -175,7 +217,13 @@ int main(int argc, char *argv[])
     if (name_commit_allocated)
         free(name_commit);
 
-    return EXIT_SUCCESS;
+    int result = __StatusToExit(repo_status) | __StatusToExit(root_status);
+    if (result != EXIT_SUCCESS)
+        UiWarning("Push finished with problems :\nRepository : %s\nRoot "
+                  "repository : %s",
+                  __StatusLabel(repo_status), __StatusLabel(root_status));
+
+    return result;
 }
 
 void __GetNameCommit(char **name_commit, char *path)
@@ -213,8 +261,12 @@ void __GetId(char **entry, char *path)
     // Get the id
     char id_added = 0;
 
-    // Check if there is an initial commit
-    if (system("git rev-parse --quiet --verify HEAD >/dev/null 2>&1") == 0)
+    // Check if there is an initial commit (in the repository being pushed)
+    char command_head[SIZE_OF_STRING + strlen(path)];
+    snprintf(command_head, sizeof(command_head),
+             "git -C \"%s\" rev-parse --quiet --verify HEAD >/dev/null 2>&1",
+             path);
+    if (system(command_head) == 0)
     {
         char command_names_push[SIZE_OF_STRING + strlen(path)];
         snprintf(command_names_push, SIZE_OF_STRING + strlen(path),

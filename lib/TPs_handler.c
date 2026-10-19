@@ -283,6 +283,226 @@ static const char *HEAL_SUBMODULES_SCRIPT =
     "git rm --cached -q -f -- \"$p\"; "
     "fi; done; true";
 
+
+// Every step reports its own problem and never stops the program
+
+// Run "git <argv>" without a shell. EXIT_SUCCESS if git succeeded.
+static int __RunGit(char *const argv[], int quiet)
+{
+    fflush(stdout);
+    fflush(stderr);
+
+    pid_t pid = fork();
+    if (pid < 0)
+        return EXIT_FAILURE;
+    if (pid == 0)
+    {
+        if (quiet)
+        {
+            int null_fd = open("/dev/null", O_WRONLY);
+            if (null_fd >= 0)
+            {
+                dup2(null_fd, STDOUT_FILENO);
+                dup2(null_fd, STDERR_FILENO);
+            }
+        }
+        execvp("git", argv);
+        _exit(127);
+    }
+
+    int status;
+    while (waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR)
+            return EXIT_FAILURE;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? EXIT_SUCCESS
+                                                           : EXIT_FAILURE;
+}
+
+// First line printed by a command. EXIT_SUCCESS if it succeeded and printed
+// something.
+static int __FirstLine(const char *command, char *buffer, size_t size)
+{
+    FILE *pipe = popen(command, "r");
+    if (pipe == NULL)
+        return EXIT_FAILURE;
+
+    int has_output = fgets(buffer, (int)size, pipe) != NULL;
+    int result = pclose(pipe);
+    if (!has_output || result != 0)
+        return EXIT_FAILURE;
+
+    buffer[strcspn(buffer, "\r\n")] = '\0';
+    return EXIT_SUCCESS;
+}
+
+// Number of local commits that are not on the upstream branch.
+// EXIT_FAILURE when there is no upstream (new branch, remote branch gone...).
+static int __UnpushedCommits(long *count)
+{
+    char line[64];
+    if (__FirstLine("git rev-list --count '@{u}..HEAD' 2>/dev/null", line,
+                    sizeof(line))
+        != EXIT_SUCCESS)
+        return EXIT_FAILURE;
+
+    char *end = NULL;
+    long value = strtol(line, &end, 10);
+    if (end == line || *end != '\0' || value < 0)
+        return EXIT_FAILURE;
+
+    *count = value;
+    return EXIT_SUCCESS;
+}
+
+// Commit what is staged in the current repository.
+// -1 : error | 0 : nothing was staged | 1 : committed
+static int __CommitStaged(const char *label, const char *commit_name)
+{
+    int staged = system("git diff --cached --quiet");
+    if (staged == -1 || !WIFEXITED(staged) || WEXITSTATUS(staged) > 1)
+    {
+        UiError("Impossible to check the changes of the %s.", label);
+        return -1;
+    }
+    if (WEXITSTATUS(staged) == 0)
+        return 0;
+
+    char *commit[] = { "git", "commit", "-q", "-m", (char *)commit_name, NULL };
+    if (__RunGit(commit, 0) != EXIT_SUCCESS)
+    {
+        UiError("Impossible to commit the %s.", label);
+        return -1;
+    }
+    return 1;
+}
+
+// Push HEAD of the current repository, then check that the remote has it.
+// pushed = number of commits sent (-1 if unknown).
+static int __PushHead(const char *label, int force_push, long *pushed)
+{
+    *pushed = -1;
+
+    // Empty repository : nothing was ever committed
+    if (system("git rev-parse --verify -q HEAD > /dev/null 2>&1") != 0)
+        return JARVIS_PUSH_NOTHING;
+
+    long ahead = 0;
+    int tracked = __UnpushedCommits(&ahead) == EXIT_SUCCESS;
+    if (tracked && ahead == 0)
+        return JARVIS_PUSH_NOTHING;
+
+    int result;
+    if (tracked)
+        result = system(force_push ? "git push --force-with-lease" : "git push");
+    else
+        result = system(force_push ? "git push --force-with-lease -u origin HEAD"
+                                   : "git push -u origin HEAD");
+    if (result != 0)
+    {
+        UiError("Impossible to push the %s (see the git message above). If "
+                "the remote has new commits, run 'jarvis pull' first.",
+                label);
+        return JARVIS_PUSH_FAILED;
+    }
+
+    long remaining = -1;
+    if (__UnpushedCommits(&remaining) != EXIT_SUCCESS || remaining != 0)
+    {
+        UiError("git did not report an error, but the %s still has commits "
+                "that are not on the remote.",
+                label);
+        return JARVIS_PUSH_FAILED;
+    }
+
+    if (tracked)
+        *pushed = ahead;
+    return JARVIS_PUSH_PUSHED;
+}
+
+// Tell what really happened. Returns the final status.
+static int __ReportPush(const char *label, int status, long pushed,
+                        int incomplete)
+{
+    switch (status)
+    {
+    case JARVIS_PUSH_PUSHED:
+        if (incomplete)
+        {
+            UiWarning("The %s was pushed, but some elements could not be "
+                      "added (see above) : they are NOT on the remote.",
+                      label);
+            return JARVIS_PUSH_PARTIAL;
+        }
+        if (pushed > 0)
+            UiSuccess("The %s was pushed (%ld commit%s).", label, pushed,
+                      pushed > 1 ? "s" : "");
+        else
+            UiSuccess("The %s was pushed.", label);
+        return JARVIS_PUSH_PUSHED;
+
+    case JARVIS_PUSH_NOTHING:
+        if (incomplete)
+        {
+            UiWarning("Nothing was pushed for the %s because some elements "
+                      "could not be added (see above).",
+                      label);
+            return JARVIS_PUSH_FAILED;
+        }
+        UiInfo("The %s has nothing to push, it is already up to date.", label);
+        return JARVIS_PUSH_NOTHING;
+
+    default:
+        return JARVIS_PUSH_FAILED;
+    }
+}
+
+static int __StatusToExit(int status)
+{
+    return status == JARVIS_PUSH_PUSHED || status == JARVIS_PUSH_NOTHING
+        ? EXIT_SUCCESS
+        : EXIT_FAILURE;
+}
+
+// A nested repository that has no commit yet can't be added by git : it refuses
+// ("does not have a commit checked out") and stages nothing at all. Its .git is
+// hidden during the add, and put back right after.
+static const char *PARK_COMMAND =
+    "find . -path './.git' -prune -o -name .git -prune "
+    "-exec sh -c 'for git_dir do repo=${git_dir%/.git}; "
+    "if ! git -C \"$repo\" rev-parse --verify HEAD >/dev/null 2>&1; "
+    "then test ! -e \"$git_dir.jarvis-tmp\" && "
+    "mv -- \"$git_dir\" \"$git_dir.jarvis-tmp\" || exit 1; "
+    "fi; done' _ {} +";
+static const char *RESTORE_COMMAND =
+    "find . -path './.git' -prune -o -name .git.jarvis-tmp -prune "
+    "-exec sh -c 'for saved do mv -- \"$saved\" "
+    "\"${saved%.jarvis-tmp}\" || exit 1; done' _ {} +";
+
+// Stage everything of the current repository. EXIT_SUCCESS if all went well,
+// the problems are displayed as warnings.
+static int __StageAll(void)
+{
+    if (system(PARK_COMMAND) != 0)
+        UiWarning("Impossible to hide the empty nested repositories, trying "
+                  "to add anyway.");
+
+    int add_result = system(
+        "git add -A -- . ':(exclude)**/.git.jarvis-tmp' "
+        "':(exclude)**/.git.jarvis-tmp/**'");
+
+    // Always put the metadata back, even if the add failed
+    int restore_result = system(RESTORE_COMMAND);
+    if (restore_result != 0)
+        UiWarning("Unable to restore nested Git metadata (look for "
+                  ".git.jarvis-tmp folders).");
+
+    if (add_result != 0)
+        UiWarning("Some elements could not be added (see the git message "
+                  "above).");
+
+    return add_result != 0 || restore_result != 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
 int AddRepoRoot()
 {
     atexit(CleanupOnExit);
@@ -290,180 +510,161 @@ int AddRepoRoot()
     char *path = GetOrCreateRepoRoot();
 
     if (chdir(path) != 0)
-        err(EXIT_FAILURE, "chdir(%s)", path);
+    {
+        UiError("Impossible to go in the root repository %s.", path);
+        free(path);
+        return EXIT_FAILURE;
+    }
     free(path);
 
     // The tree configuration is shared through the root repository : make
     // sure it exists (default values) so that it is pushed with the rest
     EnsureConfigFile();
 
-    // // Rename .git
-    // if (system(
-    //     "find . -type d -name '.git' ! -path './.git' "
-    //     "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.temp_renames_git\"' _ {}
-    //     \\; "
-    const char *park_command =
-        "find . -path './.git' -prune -o -name .git -prune "
-        "-exec sh -c 'for git_dir do repo=${git_dir%/.git}; "
-        "if ! git -C \"$repo\" rev-parse --verify HEAD >/dev/null 2>&1; "
-        "then test ! -e \"$git_dir.jarvis-tmp\" && "
-        "mv -- \"$git_dir\" \"$git_dir.jarvis-tmp\" || exit 1; "
-        "fi; done' _ {} +";
-    const char *restore_command =
-        "find . -path './.git' -prune -o -name .git.jarvis-tmp -prune "
-        "-exec sh -c 'for saved do mv -- \"$saved\" "
-        "\"${saved%.jarvis-tmp}\" || exit 1; done' _ {} +";
+    int failed = __StageAll() != EXIT_SUCCESS;
 
-    if (system(park_command))
-    {
-        if (system(restore_command) != 0)
-            UiWarning("Unable to restore nested Git metadata.");
-        return EXIT_FAILURE;
-    }
-    //     "> /dev/null 2>&1"
-    // )) {}
-
-    // Add
-    int add_result = system("git add -A -- . ':(exclude)**/.git.jarvis-tmp' ':(exclude)**/.git.jarvis-tmp/**'");
-    int restore_result = system(restore_command);
     // Always track the config, even if a .gitignore pattern matches it
-    int config_result = system(
-        "test ! -e .jarvis_config || git add -f -- .jarvis_config "
-        "> /dev/null 2>&1");
-    int stale_metadata_result =
-        system("git ls-files -z -- ':(glob)**/.git.jarvis-tmp' | xargs -0 -r git add -u --");
-    // Every nested repo with a commit must be declared in .gitmodules
-    int heal_result = system(HEAL_SUBMODULES_SCRIPT);
-    if (add_result != 0 || restore_result != 0 || config_result != 0
-        || stale_metadata_result != 0 || heal_result != 0)
+    if (system("test ! -e .jarvis_config || git add -f -- .jarvis_config "
+               "> /dev/null 2>&1")
+        != 0)
     {
-        UiError("Impossible to add elements in the root repo");
-        // RestoreGitFolders();
-        return EXIT_FAILURE;
+        UiWarning("Impossible to add .jarvis_config to the root repository.");
+        failed = 1;
     }
 
-    // // Restore
-    // RestoreGitFolders();
+    if (system("git ls-files -z -- ':(glob)**/.git.jarvis-tmp' | xargs -0 -r "
+               "git add -u --")
+        != 0)
+    {
+        UiWarning("Impossible to clean the stale nested Git metadata of the "
+                  "root repository.");
+        failed = 1;
+    }
 
-    return EXIT_SUCCESS;
+    // Every nested repo with a commit must be declared in .gitmodules
+    if (system(HEAL_SUBMODULES_SCRIPT) != 0)
+    {
+        UiWarning("Impossible to check the submodules of the root "
+                  "repository.");
+        failed = 1;
+    }
+
+    return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
-static int __PushRepoRoot(char *commit_name, int force_push)
+// Commit and push the root repository (what AddRepoRoot staged).
+// staging_failed : AddRepoRoot reported a problem, so the push can't be
+// called complete.
+static int __PushRepoRootStatus(char *commit_name, int force_push,
+                                int staging_failed)
 {
     char *path = GetOrCreateRepoRoot();
 
     if (chdir(path) != 0)
-        err(EXIT_FAILURE, "chdir(%s)", path);
+    {
+        UiError("Impossible to go in the root repository %s.", path);
+        free(path);
+        return JARVIS_PUSH_FAILED;
+    }
     free(path);
 
-    // Commit only when AddRepoRoot staged changes.
-    int staged_changes = system("git diff --cached --quiet");
-    if (staged_changes == -1 || !WIFEXITED(staged_changes)
-        || WEXITSTATUS(staged_changes) > 1)
-    {
-        UiError("Impossible to check changes in the root repo");
-        return EXIT_FAILURE;
-    }
-    if (WEXITSTATUS(staged_changes) == 1)
-    {
-        char commit_command[SIZE_OF_STRING + strlen(commit_name)];
-        snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name),
-                 "git commit -m \"%s\" > /dev/null", commit_name);
-        if (system(commit_command))
-        {
-            UiError("Impossible to commit the root repo");
-            return EXIT_FAILURE;
+    if (__CommitStaged("root repository", commit_name) < 0)
+        return JARVIS_PUSH_FAILED;
 
-        }
-    }
-    // Push
-    if (system(force_push ? "git push --force-with-lease" : "git push"))
-    {
-        UiError("Impossible to push the root repo");
-        return EXIT_FAILURE;
-    }
-
-    UiSuccess("Root repository successfully pushed.");
-
-    return EXIT_SUCCESS;
+    long pushed;
+    int status = __PushHead("root repository", force_push, &pushed);
+    return __ReportPush("root repository", status, pushed, staging_failed);
 }
 
+// JARVIS_PUSH_* result
+int PushRepoRootStatus(char *commit_name, int staging_failed)
+{
+    return __PushRepoRootStatus(commit_name, 0, staging_failed);
+}
+
+// EXIT_SUCCESS when the root is pushed or already up to date
 int PushRepoRoot(char *commit_name)
 {
-    return __PushRepoRoot(commit_name, 0);
+    return __StatusToExit(__PushRepoRootStatus(commit_name, 0, 0));
 }
 
 int PushRepoRootForce(char *commit_name)
 {
-    return __PushRepoRoot(commit_name, 1);
+    return __StatusToExit(__PushRepoRootStatus(commit_name, 1, 0));
 }
 
-int PushRepo(char *repo_path, char *commit_name, char *tag)
+// Add, commit and push the repository (and its tag). JARVIS_PUSH_* result.
+int PushRepoStatus(char *repo_path, char *commit_name, char *tag)
 {
     atexit(CleanupOnExit);
 
     if (repo_path != NULL && chdir(repo_path) != 0)
-        return -1;
+    {
+        UiError("Impossible to go in %s.", repo_path);
+        return JARVIS_PUSH_FAILED;
+    }
+
+    if (system("git rev-parse --git-dir > /dev/null 2>&1") != 0)
+    {
+        UiError("This folder is not a Git repository : %s",
+                repo_path != NULL ? repo_path : ".");
+        return JARVIS_PUSH_FAILED;
+    }
 
     char current_folder[SIZE_OF_STRING * 2];
     if (getcwd(current_folder, sizeof(current_folder)) != NULL)
         WriteInfo("current", current_folder);
 
-    // Add
-    if (system("git add . "))
-    {
-        UiError("Impossible to add elements in the repo");
-        return EXIT_FAILURE;
-    }
+    int staging_failed = __StageAll() != EXIT_SUCCESS;
 
-    // Tags
+    if (__CommitStaged("repository", commit_name) < 0)
+        return JARVIS_PUSH_FAILED;
+
+    // The tag is created after the commit, so that it points at it
+    int tag_created = 0;
     if (tag != NULL)
     {
-        char tag_command[SIZE_OF_STRING + strlen(tag)];
-        snprintf(tag_command, SIZE_OF_STRING + strlen(tag), "git tag -ma %s",
-                 tag);
-
-        char *error_message;
-        int i = 0;
-        while (system(tag_command) && i < 50)
+        for (int attempt = 0; attempt < 50 && !tag_created; attempt++)
         {
-            if (i == 0)
-                error_message = "Impossible to add the tags of the repo";
-            i++;
-
-            __AddOneToTag(&tag);
-
-            snprintf(tag_command, SIZE_OF_STRING + strlen(tag),
-                     "git tag -ma %s", tag);
+            char *tag_command[] = { "git", "tag", "-a",         tag,
+                                    "-m",  commit_name, NULL };
+            if (__RunGit(tag_command, 1) == EXIT_SUCCESS)
+                tag_created = 1;
+            else
+                __AddOneToTag(&tag);
         }
-        if (i == 50)
+        if (!tag_created)
+            UiWarning("Impossible to create the tag of the repository.");
+    }
+
+    long pushed;
+    int status = __PushHead("repository", 0, &pushed);
+    int result = __ReportPush("repository", status, pushed, staging_failed);
+
+    if (tag != NULL && result != JARVIS_PUSH_FAILED)
+    {
+        char *push_tag[] = { "git", "push", "origin", "tag", tag, NULL };
+        if (tag_created && __RunGit(push_tag, 0) == EXIT_SUCCESS)
+            UiSuccess("The tag %s was pushed.", tag);
+        else
         {
-            UiError("%s", error_message);
-            return EXIT_FAILURE;
+            if (tag_created)
+                UiWarning("Impossible to push the tag %s.", tag);
+            result = JARVIS_PUSH_PARTIAL;
         }
     }
 
-    // Commit
-    char commit_command[SIZE_OF_STRING + strlen(commit_name)];
-    snprintf(commit_command, SIZE_OF_STRING + strlen(commit_name),
-             "git commit -m \"%s\"", commit_name);
-    if (system(commit_command))
-    {
-        UiError("Impossible to commit the repo");
-        return EXIT_FAILURE;
-    }
+    return result;
+}
 
-    // Push
-    if ((tag == NULL && system("git push"))
-        || (tag != NULL && system("git push --tags")))
-    {
-        UiError("Impossible to push the repo");
-        return EXIT_FAILURE;
-    }
+// Old interface : -1 if the folder does not exist, else EXIT_SUCCESS when
+// pushed or already up to date
+int PushRepo(char *repo_path, char *commit_name, char *tag)
+{
+    if (repo_path != NULL && !IsDirectory(repo_path))
+        return -1;
 
-    UiSuccess("Repository successfully pushed.");
-
-    return EXIT_SUCCESS;
+    return __StatusToExit(PushRepoStatus(repo_path, commit_name, tag));
 }
 
 void __RunCommand(const char *command)
