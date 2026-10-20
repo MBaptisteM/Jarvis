@@ -14,6 +14,7 @@
 
 #include "TPs_handler.h"
 #include "choice.h"
+#include "format_handler.h"
 #include "info_file.h"
 #include "ui.h"
 

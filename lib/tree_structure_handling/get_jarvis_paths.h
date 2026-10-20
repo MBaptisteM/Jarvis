@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "format_handler.h"
 #include "info_file.h"
 #include "tree_structure.h"
 #include "ui.h"

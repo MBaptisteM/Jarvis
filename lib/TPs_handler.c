@@ -246,7 +246,7 @@ void InstallGH()
 // void RestoreGitFolders(){
 //     if (system(
 //     "find . -type d -name '.temp_renames_git' "
-//     "-exec sh -c 'mv \"$1\" \"$(dirname \"$1\")/.git\"' _ {} \\;"
+//     "-exec sh -n 'mv \"$1\" \"$(dirname \"$1\")/.git\"' _ {} \\;"
 //     "> /dev/null 2>&1"
 //     )){}
 // }
@@ -283,7 +283,22 @@ static const char *HEAL_SUBMODULES_SCRIPT =
     "git rm --cached -q -f -- \"$p\"; "
     "fi; done; true";
 
-// Every step reports its own problem and never stops the program
+// ---------------------------------------------------------------------------
+// Push helpers
+//
+// Every step reports its own problem and never stops the program : the caller
+// decides what to do with the result. "Pushed" is only announced when git
+// really sent commits to the remote (checked after the push).
+// ---------------------------------------------------------------------------
+
+// Result of the push functions (same values in push.c)
+#ifndef JARVIS_PUSH_PUSHED
+#    define JARVIS_PUSH_PUSHED 0 // commits were really pushed
+#    define JARVIS_PUSH_FAILED 1 // a step failed (the error was displayed)
+#    define JARVIS_PUSH_NOTHING                                                \
+        2 // nothing to commit nor push, already up to date
+#    define JARVIS_PUSH_PARTIAL 3 // pushed, but a part of the work was left out
+#endif
 
 // Run "git <argv>" without a shell. EXIT_SUCCESS if git succeeded.
 static int __RunGit(char *const argv[], int quiet)
@@ -421,6 +436,68 @@ static int __PushHead(const char *label, int force_push, long *pushed)
 }
 
 // Tell what really happened. Returns the final status.
+// Explain why a folder added by hand is not pushed : git does not track empty
+// folders, and ignores what .gitignore says. Run in the repository.
+#define HINT_MAX_LINES 5
+static size_t __CollectLines(const char *command, const char *skip_prefix,
+                             char *out, size_t out_size)
+{
+    FILE *pipe = popen(command, "r");
+    if (pipe == NULL)
+        return 0;
+
+    size_t count = 0;
+    size_t used = strlen(out);
+    char line[1024];
+    while (fgets(line, sizeof(line), pipe) != NULL)
+    {
+        line[strcspn(line, "\r\n")] = '\0';
+        char *entry = line + (skip_prefix != NULL ? strlen(skip_prefix) : 0);
+        if (skip_prefix != NULL
+            && strncmp(line, skip_prefix, strlen(skip_prefix)) != 0)
+            continue;
+        if (strstr(entry, ".git.jarvis-tmp") != NULL || entry[0] == '\0')
+            continue;
+
+        if (count < HINT_MAX_LINES)
+            used += (size_t)snprintf(out + used,
+                                     used < out_size ? out_size - used : 0,
+                                     "\n  %s", entry);
+        count++;
+    }
+    pclose(pipe);
+    return count;
+}
+
+static void __HintUntrackedContent(void)
+{
+    char empty[2048] = "";
+    char ignored[2048] = "";
+
+    size_t empty_count = __CollectLines(
+        "find . -name .git -prune -o -type d -empty -print 2>/dev/null", NULL,
+        empty, sizeof(empty));
+    size_t ignored_count =
+        __CollectLines("git status --porcelain --ignored 2>/dev/null", "!! ",
+                       ignored, sizeof(ignored));
+
+    if (empty_count == 0 && ignored_count == 0)
+        return;
+
+    if (empty_count > 0 && ignored_count > 0)
+        UiWarning("If you added something by hand, git does not see it :\n"
+                  "Empty folders (git does not track them, add a file such "
+                  "as .gitkeep) :%s\n"
+                  "Ignored by .gitignore :%s",
+                  empty, ignored);
+    else if (empty_count > 0)
+        UiWarning("Empty folders are not tracked by git (add a file such as "
+                  ".gitkeep inside to push them) :%s",
+                  empty);
+    else
+        UiWarning("Ignored by .gitignore, so not pushed :%s", ignored);
+}
+
 static int __ReportPush(const char *label, int status, long pushed,
                         int incomplete)
 {
@@ -450,6 +527,7 @@ static int __ReportPush(const char *label, int status, long pushed,
             return JARVIS_PUSH_FAILED;
         }
         UiInfo("The %s has nothing to push, it is already up to date.", label);
+        __HintUntrackedContent();
         return JARVIS_PUSH_NOTHING;
 
     default:

@@ -1,13 +1,5 @@
 #include "help.h"
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-
 #define MAX_ROWS 8
 #define MAX_EXAMPLES 5
 
@@ -125,20 +117,41 @@ static const Command COMMANDS[] = {
     { .name = "push",
       .shortcut = "ps",
       .group = "Repositories",
-      .usage = "jarvis push [root | current/c/cu/cur/curr | <path>]",
+      .usage =
+          "jarvis push [root | current/c/cu/cur/curr | <path>] [-n <name>] "
+          "[-t <tag>] [-p <path>]",
       .summary = "Commit and push a repository and the root repository.",
-      .details = "Adds, commits and pushes a repository, and updates the root "
-                 "repository at the same time. The commit name is generated "
-                 "automatically unless one is given.",
+      .details =
+          "Adds, commits and pushes a repository, then updates and pushes the "
+          "root repository. The commit name is generated automatically unless "
+          "one is given (or it is the name of the tag, if any). If the "
+          "automatic format is enabled in 'jarvis custom' (off by default), "
+          "the repository is formatted with jarvis format first ; the root "
+          "repository alone is never formatted. A problem never stops the "
+          "other steps : the root repository is pushed even if the "
+          "repository push failed, \"pushed\" is displayed only when commits "
+          "were really sent, and the exit code is not zero if something "
+          "failed. A nested repository without any commit is hidden while "
+          "adding. The --option=<value> form also works (ex : --name=\"Fix\").",
       .rows_title = "Arguments",
       .rows = { { "root", "Push only the root repository." },
                 { "current (c/cu/cur/curr)", "Push the current repository." },
                 { "<path>",
                   "Push the repository at this path (default: the "
                   "current folder)." },
+                { "-n, --name <name>",
+                  "Name of the commit (generated when "
+                  "missing). --name works too." },
+                { "-t, --tag <name>",
+                  "Create and push a tag named <name>-<number> "
+                  "(ex : v1-0)." },
+                { "-p, --path <path>",
+                  "Same as <path> (root and current "
+                  "work too)." },
                 { NULL, NULL } },
       .examples = { "jarvis push", "jarvis push current", "jarvis push root",
-                    NULL } },
+                    "jarvis push -n \"Fix bug\" -t v1 -p ~/TPs/my_repo",
+                    "jarvis push --name=\"Fix bug\" --path current", NULL } },
 
     { .name = "find",
       .shortcut = "f",
@@ -189,14 +202,18 @@ static const Command COMMANDS[] = {
       .shortcut = NULL,
       .group = "Organization",
       .usage = "jarvis custom",
-      .summary = "Customize the tree structure (layers, prefixes, Others).",
+      .summary =
+          "Customize the tree structure and the format (layers, prefixes, "
+          "Others, Format).",
       .details =
-          "Interactive menu, everything is chosen with the arrows and enter. "
-          "The settings are stored in the .jarvis_config file of the root "
-          "repository (created with the default values if missing), so once "
-          "pushed and pulled every Jarvis of a project shares them. Quitting "
-          "applies the changes to the repositories already cloned (they are "
-          "moved); Save also pushes the root repository.",
+          "Interactive menu, chosen with the arrows and enter (prefixes, names "
+          "and extensions are typed). The settings are stored in the "
+          ".jarvis_config file of the root repository (created with the "
+          "default values if missing), so once pushed and pulled every Jarvis "
+          "of a project shares them. Quitting applies the changes to the "
+          "repositories already cloned (they are moved); Save also pushes the "
+          "root repository. The Format settings are saved at once, Save "
+          "pushes them.",
       .rows_title = "Menu",
       .rows = { { "Layers",
                   "Enable or disable Year, Semester and Bimester "
@@ -207,6 +224,13 @@ static const Command COMMANDS[] = {
                 { "Others",
                   "Rename the folder used when the course can't "
                   "be deduced (default: Others)." },
+                { "Format",
+                  "Enable or disable the automatic jarvis format "
+                  "before each push (default: disabled), add or "
+                  "remove the extensions it formats (case, spaces "
+                  "and the leading dot don't matter : \"C++, "
+                  "Json\" gives .c++ and .json), show or restore "
+                  "the default list." },
                 { "Reset", "Go back to the default organization." },
                 { "Save",
                   "Apply the changes to the tree and push the root "
@@ -218,18 +242,25 @@ static const Command COMMANDS[] = {
     { .name = "format",
       .shortcut = "fm",
       .group = "Organization",
-      .usage = "jarvis format",
+      .usage = "jarvis format [<path> | -p <path>]",
       .summary = "Format the code of the current folder with clang-format.",
       .details =
           "Runs clang-format -i on every C, C++, Java, JavaScript, TypeScript, "
           "C#, JSON, Objective-C, Protobuf, Verilog (and other languages "
-          "supported by clang-format) file of the current folder and all its "
-          "sub-folders. The .clang-format file closest to each file is used. "
-          ".git and node_modules folders are skipped. A file that can't be "
-          "formatted is reported but does not stop the others.",
+          "supported by clang-format) file of the current folder (or of the "
+          "given folder) and all its sub-folders. clang-format must be "
+          "installed. The .clang-format file "
+          "closest to each file is used. .git and node_modules folders are "
+          "skipped. A file that can't be "
+          "formatted is reported but does not stop the others. The "
+          "extensions, and an automatic run before each jarvis push, are set "
+          "in 'jarvis custom' > Format.",
       .rows_title = "Arguments",
-      .rows = { { NULL, NULL } },
-      .examples = { "jarvis format", "j fm", NULL } },
+      .rows = { { "<path>", "Folder to format (default: the current folder)." },
+                { "-p, --path <path>", "Same as <path>." },
+                { NULL, NULL } },
+      .examples = { "jarvis format", "jarvis format ../EPITA-TPs", "j fm",
+                    NULL } },
 
     { .name = "erase",
       .shortcut = NULL,

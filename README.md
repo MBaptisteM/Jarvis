@@ -24,19 +24,21 @@
   * [GitHub Integration](#github-integration)
   * [Sync & Locate](#sync--locate)
   * [Customizable Organization](#customizable-organization)
+  * [Code Formatting](#code-formatting)
 * [Installation](#installation)
 * [Commands](#commands)
-  * [Authentication Command](#authentication-command)
-  * [Clone Command](#clone-command)
-  * [Fill Command](#fill-command)
-  * [Pull Command](#pull-command)
-  * [Push Command](#push-command)
-  * [Find Command](#find-command)
-  * [Go Command](#go-command)
-  * [Custom Command](#custom-command)
-  * [Erase Command](#erase-command)
-  * [Help Command](#help-command)
-  * [Uninstall Command](#uninstall-command)
+  * [Authentication](#authentication-command)
+  * [Clone](#clone-command)
+  * [Fill](#fill-command)
+  * [Pull](#pull-command)
+  * [Push](#push-command)
+  * [Format](#format-command)
+  * [Find](#find-command)
+  * [Go](#go-command)
+  * [Custom](#custom-command)
+  * [Erase](#erase-command)
+  * [Help](#help-command)
+  * [Uninstall](#uninstall-command)
   * [Shortcuts](#shortcuts)
 * [License](#license)
 
@@ -164,8 +166,22 @@ Choose how your workspace is laid out with `jarvis custom`.
 
 * Enable or disable the Year, Semester and Bimester layers.
 * Choose the prefix written before each number (`S`, `Semester`, ...).
+* Rename the `Others` folder.
+* Enable the automatic code formatting before each push and choose which file
+  extensions are formatted (see [Code Formatting](#code-formatting)).
 * Existing repositories are moved to their new location when you leave the menu.
 * The root repository can be pushed right away.
+
+
+
+## Code Formatting
+
+Format your code with `clang-format` in one command, or automatically before every push.
+
+* `jarvis format [<path>]` formats every supported file of the current folder (or of the given folder) and its sub-folders.
+* The automatic format before `jarvis push` is disabled by default, enable it in `jarvis custom`.
+* The formatted extensions can be edited (add / remove / restore the default list).
+* A formatting problem is reported but never blocks a push.
 
 ---
 
@@ -327,7 +343,7 @@ Commit and push a repository together with the root repository.
 ### Usage
 
 ```bash
-jarvis push [root | current/c/cu/cur/curr | <path>]
+jarvis push [root | current/c/cu/cur/curr | <path>] [-n <name>] [-t <tag>] [-p <path>]
 ```
 
 * No argument: pushes the repository of the current folder.
@@ -336,14 +352,94 @@ jarvis push [root | current/c/cu/cur/curr | <path>]
 * `root`: pushes only the root repository.
 * `<path>`: pushes the repository located at this path.
 
-Changes are added and committed with an automatic, numbered name unless you
-give one. The root repository is updated and pushed at the same time.
+Options:
+
+| Option                 | Description                                                              |
+|------------------------|--------------------------------------------------------------------------|
+| `-n`, `--name <name>` | Name of the commit (an automatic, numbered name is generated otherwise, or the name of the tag if there is one). |
+| `-t`, `--tag <name>`    | Creates and pushes a tag named `<name>-<number>` (ex: `v1` gives `v1-0`, then `v1-1`...). |
+| `-p`, `--path <path>`   | Same as `<path>`; `root` and `current` also work as values.              |
+
+`--name=<name>`, `--tag=<name>` and `--path=<path>` work too, and `--name` is
+an alias of `--name`. An unknown option stops the command with an error. The older
+`name=<name>` and `tag=<name>` arguments are still accepted.
+
+The repository is pushed first, then the root repository, which records the new
+state of the repository. Running `jarvis push` from the root repository pushes
+only the root repository.
+
+If the automatic format is enabled (see [Custom](#custom-command)), the
+repository is formatted before it is committed. The root repository alone
+(`jarvis push root`, or a push from the root repository) is never formatted,
+since it would reformat every repository of the tree.
+
+### Reliable reporting
+
+* A problem (a failed `git add`, a rejected push, an unreachable remote...) is
+  reported but does not stop the other steps: the root repository is pushed even
+  if the repository push failed.
+* "Pushed" is displayed only when commits were really sent to the remote.
+  Otherwise Jarvis tells you that there is nothing to push, or why the push
+  failed (and suggests `jarvis pull` when the remote has new commits).
+* A nested repository without any commit is temporarily hidden while staging
+  (git would otherwise refuse the whole `git add`) and restored right after, so
+  it is not recorded in the root repository until it has a commit.
+* When there is nothing to push, Jarvis lists what git does not see if you
+  added something by hand: empty folders (git does not track them, add a file
+  such as `.gitkeep`) and files ignored by `.gitignore`.
+* The exit code is not zero when something failed, and a summary of what was
+  pushed and what was not is printed.
+* The tag is created after the commit, so it points to the pushed commit.
 
 ### Example
 
 ```bash
 jarvis push
 jarvis push root
+jarvis push -n "Fix bug" -t v1 -p ~/EPITA-TPs/S1/B2/my_repository
+jarvis push --name="Fix bug" --path current
+```
+
+
+
+## Format Command
+
+Format the code of the current folder with `clang-format`.
+
+### Usage
+
+```bash
+jarvis format [<path> | -p <path>]
+```
+
+* No argument: formats the current folder.
+* `<path>` (or `-p`, `--path <path>`): formats this folder instead. It must be an
+  existing folder.
+
+Runs `clang-format -i` on every file of the folder and all its
+sub-folders having one of the configured extensions. `clang-format` must be
+installed (otherwise an error says so). The `.clang-format` file closest to each
+file is used, and the extensions are compared without taking the case into
+account.
+
+Default extensions: `.cpp`, `.cc`, `.cxx`, `.c++`, `.cp`, `.hpp`, `.hh`, `.hxx`,
+`.h++`, `.inline.hpp`, `.inl`, `.tpp`, `.txx`, `.c`, `.h`, `.cu`, `.cuh`, `.ixx`,
+`.cppm`, `.mxx`, `.ccm`, `.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.cs`, `.java`,
+`.json`, `.ipynb`, `.m`, `.mm`, `.proto`, `.protodevel`, `.textproto`, `.textpb`,
+`.txtpb`, `.pb.txt`, `.asciipb`, `.td`, `.v`, `.vh`, `.sv`, `.svh`.
+
+`.git` and `node_modules` folders are skipped (and the temporary
+`.git.jarvis-tmp` ones). A file that can't be formatted is
+reported and does not stop the others.
+
+The extensions, and the automatic run before each `jarvis push`, are set in
+`jarvis custom` > **Format**.
+
+### Example
+
+```bash
+jarvis format
+jarvis format ../EPITA-TPs
 ```
 
 
@@ -410,15 +506,28 @@ Customize the tree structure of your repositories.
 jarvis custom
 ```
 
-Everything is chosen with the arrows and enter:
+Menus are chosen with the arrows and enter (prefixes, names and extensions are
+typed):
 
 * **Layers**: enable or disable the Year, Semester and Bimester folders (default: Semester and Bimester).
 * **Prefixes**: choose the text written before each number (default: `Y`, `S`, `B`).
+* **Others**: rename the folder used when the course can't be deduced (default: `Others`).
+* **Format**: enable or disable the automatic `jarvis format` before each push
+  (default: disabled), and edit the formatted extensions:
+  * **add**: type one or several extensions separated by commas. Case and spaces
+    are ignored and the leading dot is optional (`C++, .Json,  pb.txt` becomes
+    `.c++`, `.json`, `.pb.txt`). Invalid entries are reported and ignored.
+  * **remove**: type the extensions to remove, with the same rules.
+  * **show the list** and **restore the default ones**.
 * **Reset**: go back to the default organization.
 * **Save**: applies the changes to your existing repositories (they are moved) and pushes the root repository.
 * **Quit**: applies the changes to your existing repositories, without pushing.
 
-Repositories in the `Others` folder are never moved.
+The settings are stored in the `.jarvis_config` file of the root repository, so
+once pushed they are shared by every Jarvis using it. Format settings are saved
+immediately; use **Save** to push them.
+
+Repositories in the `Others` folder are never moved (unless the folder is renamed).
 
 ### Example
 
@@ -485,6 +594,7 @@ Are you sure you want to uninstall Jarvis? [y/N]
 | `fill`      | `fl`     |
 | `pull`      | `pl`     |
 | `push`      | `ps`     |
+| `format`    | `fm`     |
 | `find`      | `f`      |
 | `go`        | `g`      |
 | `help`      | `h`      |

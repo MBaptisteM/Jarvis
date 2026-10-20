@@ -287,6 +287,319 @@ static int __LayersMenu(void)
     return changed;
 }
 
+// ---------------------------------------------------------------------------
+// Format : automatic "jarvis format" before each push, and its extensions
+// ---------------------------------------------------------------------------
+
+typedef struct
+{
+    char **items;
+    size_t count;
+} ExtensionList;
+
+// Split "a,b,c" (items are malloc'd)
+static ExtensionList __SplitList(const char *text, const char *separators)
+{
+    ExtensionList list = { NULL, 0 };
+    char *copy = strdup(text);
+    if (copy == NULL)
+        err(EXIT_FAILURE, "strdup");
+
+    list.items = malloc((strlen(text) + 1) * sizeof(char *));
+    if (list.items == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    char *save = NULL;
+    for (char *token = strtok_r(copy, separators, &save); token != NULL;
+         token = strtok_r(NULL, separators, &save))
+    {
+        list.items[list.count] = strdup(token);
+        if (list.items[list.count] == NULL)
+            err(EXIT_FAILURE, "strdup");
+        list.count++;
+    }
+
+    free(copy);
+    return list;
+}
+
+static void __FreeList(ExtensionList *list)
+{
+    for (size_t i = 0; i < list->count; i++)
+        free(list->items[i]);
+    free(list->items);
+    list->items = NULL;
+    list->count = 0;
+}
+
+static int __ListIndex(const ExtensionList *list, const char *extension)
+{
+    for (size_t i = 0; i < list->count; i++)
+        if (strcmp(list->items[i], extension) == 0)
+            return (int)i;
+    return -1;
+}
+
+// Save the list as ".a,.b,.c"
+static int __SaveExtensions(const ExtensionList *list)
+{
+    size_t size = 1;
+    for (size_t i = 0; i < list->count; i++)
+        size += strlen(list->items[i]) + 1;
+
+    char *joined = malloc(size);
+    if (joined == NULL)
+        err(EXIT_FAILURE, "malloc");
+    joined[0] = '\0';
+    for (size_t i = 0; i < list->count; i++)
+    {
+        if (i > 0)
+            strcat(joined, ",");
+        strcat(joined, list->items[i]);
+    }
+
+    int result = SetConfigValue("format_extensions", joined);
+    free(joined);
+    if (result != EXIT_SUCCESS)
+        UiError("Impossible to save the extensions (is the list too long ?).");
+    return result == EXIT_SUCCESS;
+}
+
+static void __PrintExtensions(void)
+{
+    char *current = GetFormatExtensions();
+    ExtensionList list = __SplitList(current, ",");
+    free(current);
+
+    if (list.count == 0)
+    {
+        UiPanel(stdout, UI_INFO, "Format extensions",
+                "(none : jarvis format does nothing)");
+        __FreeList(&list);
+        return;
+    }
+
+    size_t size = 1;
+    for (size_t i = 0; i < list.count; i++)
+        size += strlen(list.items[i]) + 2;
+    char *text = malloc(size);
+    if (text == NULL)
+        err(EXIT_FAILURE, "malloc");
+    text[0] = '\0';
+    for (size_t i = 0; i < list.count; i++)
+    {
+        if (i > 0)
+            strcat(text, ", ");
+        strcat(text, list.items[i]);
+    }
+
+    UiPanel(stdout, UI_INFO, "Format extensions", "%zu extension(s) :\n%s",
+            list.count, text);
+    free(text);
+    __FreeList(&list);
+}
+
+// Ask extensions (separated by commas), return the normalized ones. The
+// invalid entries are reported. NULL list items when nothing was typed.
+static ExtensionList __AskExtensions(const char *question)
+{
+    ExtensionList result = { NULL, 0 };
+
+    UiQuestion("%s\n"
+               "Case, spaces and the leading dot don't matter (ex : \"C++, "
+               ".Json,  pb.txt\"). Separate several with commas, empty to "
+               "cancel.",
+               question);
+    char *line = __ReadLine("> ");
+    if (line == NULL)
+        return result;
+
+    ExtensionList typed = __SplitList(line, ",");
+    free(line);
+
+    result.items = malloc((typed.count + 1) * sizeof(char *));
+    if (result.items == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    for (size_t i = 0; i < typed.count; i++)
+    {
+        char *normalized = NormalizeExtension(typed.items[i]);
+        if (normalized == NULL)
+            UiWarning("\"%s\" is not a valid extension (letters, digits, + - _ "
+                      "and inner dots only), ignored.",
+                      typed.items[i]);
+        else if (__ListIndex(&result, normalized) >= 0)
+            free(normalized);
+        else
+            result.items[result.count++] = normalized;
+    }
+
+    __FreeList(&typed);
+    return result;
+}
+
+static int __AddExtensions(void)
+{
+    ExtensionList added = __AskExtensions("Extensions to add to jarvis format");
+    if (added.count == 0)
+    {
+        UiInfo("Nothing changed.");
+        __FreeList(&added);
+        return 0;
+    }
+
+    char *current = GetFormatExtensions();
+    ExtensionList list = __SplitList(current, ",");
+    free(current);
+
+    size_t new_count = 0;
+    for (size_t i = 0; i < added.count; i++)
+    {
+        if (__ListIndex(&list, added.items[i]) >= 0)
+        {
+            UiInfo("%s is already in the list.", added.items[i]);
+            continue;
+        }
+
+        char **grown = realloc(list.items, (list.count + 1) * sizeof(char *));
+        if (grown == NULL)
+            err(EXIT_FAILURE, "realloc");
+        list.items = grown;
+        list.items[list.count++] = added.items[i];
+        added.items[i] = NULL;
+        new_count++;
+    }
+
+    int saved = new_count > 0 && __SaveExtensions(&list);
+    if (saved)
+        UiSuccess("%zu extension(s) added.", new_count);
+    else if (new_count == 0)
+        UiInfo("Nothing changed.");
+
+    // Items moved to the list were set to NULL in "added"
+    for (size_t i = 0; i < added.count; i++)
+        free(added.items[i]);
+    free(added.items);
+    __FreeList(&list);
+    return saved;
+}
+
+static int __RemoveExtensions(void)
+{
+    __PrintExtensions();
+    ExtensionList removed = __AskExtensions("Extensions to remove from jarvis "
+                                            "format");
+    if (removed.count == 0)
+    {
+        UiInfo("Nothing changed.");
+        __FreeList(&removed);
+        return 0;
+    }
+
+    char *current = GetFormatExtensions();
+    ExtensionList list = __SplitList(current, ",");
+    free(current);
+
+    size_t removed_count = 0;
+    for (size_t i = 0; i < removed.count; i++)
+    {
+        int index = __ListIndex(&list, removed.items[i]);
+        if (index < 0)
+        {
+            UiInfo("%s is not in the list.", removed.items[i]);
+            continue;
+        }
+
+        free(list.items[index]);
+        for (size_t j = (size_t)index; j + 1 < list.count; j++)
+            list.items[j] = list.items[j + 1];
+        list.count--;
+        removed_count++;
+    }
+
+    int saved = removed_count > 0 && __SaveExtensions(&list);
+    if (saved)
+        UiSuccess("%zu extension(s) removed.", removed_count);
+    else if (removed_count == 0)
+        UiInfo("Nothing changed.");
+
+    __FreeList(&removed);
+    __FreeList(&list);
+    return saved;
+}
+
+static int __ResetExtensions(void)
+{
+    UiQuestion("Restore the default extensions of jarvis format ?");
+
+    const char *options[] = { "No, keep my extensions",
+                              "Yes, restore the default extensions" };
+    if (ChoiceMCQ(options, 2) != 1)
+    {
+        UiInfo("Nothing changed.");
+        return 0;
+    }
+
+    if (SetConfigValue("format_extensions", GetDefaultFormatExtensions())
+        != EXIT_SUCCESS)
+    {
+        UiError("Impossible to save the extensions.");
+        return 0;
+    }
+    UiSuccess("Default extensions restored.");
+    return 1;
+}
+
+// Returns 1 when a setting changed
+static int __FormatMenu(void)
+{
+    int changed = 0;
+
+    UiQuestion("What do you want to change in jarvis format ?");
+    while (1)
+    {
+        char label_auto[128];
+        snprintf(label_auto, sizeof(label_auto),
+                 "[%c] Automatic format before each jarvis push",
+                 IsAutoFormatEnabled() ? 'x' : ' ');
+
+        const char *options[] = { label_auto,
+                                  "Extensions : add",
+                                  "Extensions : remove",
+                                  "Extensions : show the list",
+                                  "Extensions : restore the default ones",
+                                  "Back" };
+
+        int choice = ChoiceMCQ(options, 6);
+        if (choice < 0 || choice >= 5)
+            break;
+
+        switch (choice)
+        {
+        case 0:
+            __Save("auto_format", IsAutoFormatEnabled() ? "off" : "on");
+            UiSuccess("Automatic format %s.",
+                      IsAutoFormatEnabled() ? "enabled" : "disabled");
+            changed = 1;
+            break;
+        case 1:
+            changed |= __AddExtensions();
+            break;
+        case 2:
+            changed |= __RemoveExtensions();
+            break;
+        case 3:
+            __PrintExtensions();
+            break;
+        default:
+            changed |= __ResetExtensions();
+            break;
+        }
+    }
+
+    return changed;
+}
+
 static int __Reset(void)
 {
     UiQuestion("Reset the organization to the default one ?");
@@ -993,6 +1306,7 @@ int main(int argc, char *argv[])
     __PrintCurrent();
 
     int changed = 0;
+    int format_changed = 0;
     int running = 1;
     while (running)
     {
@@ -1002,13 +1316,14 @@ int main(int argc, char *argv[])
             "Layers : enable or disable Year / Semester / Bimester folders",
             "Prefixes : choose the text before the number (ex : S<n>)",
             "Others : rename the folder used when the course is unknown",
+            "Format : automatic jarvis format before push, extensions",
             "Reset : go back to the default organization",
             "Save : apply to the tree and push",
             "Quit : apply to the tree (no push)"
         };
 
         int updated = 0;
-        switch (ChoiceMCQ(options, 6))
+        switch (ChoiceMCQ(options, 7))
         {
         case 0:
             updated = __LayersMenu();
@@ -1020,12 +1335,17 @@ int main(int argc, char *argv[])
             updated = __AskOthers();
             break;
         case 3:
-            updated = __Reset();
+            // Saved at once in .jarvis_config, no change in the tree
+            if (__FormatMenu())
+                format_changed = 1;
             break;
         case 4:
+            updated = __Reset();
+            break;
+        case 5:
             // Save : apply the organization, then push the root repository
             if (__Finish(1) == EXIT_SUCCESS)
-                changed = 0;
+                changed = format_changed = 0;
             break;
         default:
             running = 0;
@@ -1045,8 +1365,14 @@ int main(int argc, char *argv[])
         int result = __Finish(0);
         UiWarning("Not pushed : choose \"Save\" next time, or run 'jarvis "
                   "push root'.");
+        if (format_changed)
+            UiWarning("The format settings are in the same file.");
         return result;
     }
+
+    if (format_changed)
+        UiWarning("Format settings not pushed : choose \"Save\" next time, or "
+                  "run 'jarvis push root'.");
 
     return EXIT_SUCCESS;
 }

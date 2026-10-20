@@ -9,6 +9,7 @@
 
 #include "TPs_handler.h"
 #include "current_handling.h"
+#include "format_handler.h"
 #include "info_file.h"
 #include "ui.h"
 

@@ -34,22 +34,114 @@ static int __PushRootOnly(char *commit_name)
     return PushRepoRootStatus(commit_name, staging_failed);
 }
 
-// Is this folder the root repository itself ?
+// Same folder ?
+static int __SameFolder(const char *a, const char *b)
+{
+    char *real_a = realpath(a, NULL);
+    char *real_b = realpath(b, NULL);
+    int same = real_a != NULL && real_b != NULL && strcmp(real_a, real_b) == 0;
+    free(real_a);
+    free(real_b);
+    return same;
+}
+
+// Is this folder the root repository itself ? The saved root path may be the
+// root repository or its parent folder (<saved path>/EPITA-TPs).
 static int __IsRootPath(const char *path)
 {
     char *root = NULL;
     if (ReadRootPath(&root) != EXIT_SUCCESS || root == NULL)
         return 0;
 
-    char *real_path = realpath(path, NULL);
-    char *real_root = realpath(root, NULL);
-    int same = real_path != NULL && real_root != NULL
-        && strcmp(real_path, real_root) == 0;
+    int same = __SameFolder(path, root);
+    if (!same)
+    {
+        size_t size = strlen(root) + strlen(REPO_NAME) + 2;
+        char *nested = malloc(size);
+        if (nested == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(nested, size, "%s/%s", root, REPO_NAME);
 
-    free(real_path);
-    free(real_root);
+        char *git_dir = malloc(size + sizeof("/.git"));
+        if (git_dir == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(git_dir, size + sizeof("/.git"), "%s/.git", nested);
+
+        // The repository is inside the saved path only if it has a .git
+        char *root_git = malloc(strlen(root) + sizeof("/.git") + 1);
+        if (root_git == NULL)
+            err(EXIT_FAILURE, "malloc");
+        sprintf(root_git, "%s/.git", root);
+        if (access(root_git, F_OK) != 0 && access(git_dir, F_OK) == 0)
+            same = __SameFolder(path, nested);
+
+        free(root_git);
+        free(git_dir);
+        free(nested);
+    }
+
     free(root);
     return same;
+}
+
+// -t does not apply to the root repository alone
+static void __WarnTagIgnored(const char *tag)
+{
+    if (tag != NULL)
+        UiWarning("The tag \"%s\" is ignored : the root repository alone is "
+                  "pushed without a tag.",
+                  tag);
+}
+
+// Value of an option : "-n value" / "--name value" (the value is the next
+// argument) or "--name=value". Returns NULL if argv[k] is not this option.
+// *k is moved onto the value when it is the next argument.
+static char *__OptionValue(int argc, char *argv[], int *k, char short_name,
+                           const char *long_name)
+{
+    const char *arg = argv[*k];
+    size_t long_length = strlen(long_name);
+
+    if (arg[0] != '-')
+        return NULL;
+
+    if (short_name != '\0' && arg[1] == short_name && arg[2] == '\0')
+    {
+        if (*k + 1 >= argc)
+            errx(EXIT_FAILURE, "ERROR The option %s needs a value", arg);
+        return argv[++(*k)];
+    }
+
+    if (arg[1] == '-' && strncmp(arg + 2, long_name, long_length) == 0)
+    {
+        if (arg[2 + long_length] == '=')
+            return (char *)arg + 3 + long_length;
+        if (arg[2 + long_length] == '\0')
+        {
+            if (*k + 1 >= argc)
+                errx(EXIT_FAILURE, "ERROR The option %s needs a value", arg);
+            return argv[++(*k)];
+        }
+    }
+
+    return NULL;
+}
+
+// Set the repository to push from a path, "root" or a "current" keyword
+static void __SetPath(char **path, char *value, char *current_folder)
+{
+    if (strcasecmp(value, "root") == 0)
+        *path = value;
+    else if (IsCurrentKeyword(value))
+    {
+        if (ReadInfo("current", path))
+            errx(EXIT_FAILURE,
+                 "ERROR trying to push the current repository but no "
+                 "current repository found");
+        *current_folder = 1;
+    }
+    else
+        *path = value;
 }
 
 int main(int argc, char *argv[])
@@ -65,8 +157,32 @@ int main(int argc, char *argv[])
     int k = 1;
     while (argc > k)
     {
+        char *option_value;
+
+        // Options : -n/--name <name>, -t/--tag <name>, -p/--path <path>
+        if ((option_value = __OptionValue(argc, argv, &k, 'n', "name")) != NULL)
+        {
+            // --name is the same as --name
+            if (option_value[0] == '\0')
+                errx(EXIT_FAILURE, "ERROR The commit name is empty");
+            name_commit = option_value;
+        }
+        else if ((option_value = __OptionValue(argc, argv, &k, 't', "tag"))
+                 != NULL)
+        {
+            if (option_value[0] == '\0')
+                errx(EXIT_FAILURE, "ERROR The tag name is empty");
+            tag = option_value;
+        }
+        else if ((option_value = __OptionValue(argc, argv, &k, 'p', "path"))
+                 != NULL)
+        {
+            if (option_value[0] == '\0')
+                errx(EXIT_FAILURE, "ERROR The path is empty");
+            __SetPath(&path, option_value, &current_folder);
+        }
         // Case root
-        if (strcasecmp(argv[k], "root") == 0)
+        else if (strcasecmp(argv[k], "root") == 0)
         {
             path = argv[k];
         }
@@ -78,6 +194,13 @@ int main(int argc, char *argv[])
                      "ERROR trying to push the current repository but no "
                      "current repository found");
             current_folder = 1;
+        }
+        else if (argv[k][0] == '-' && argv[k][1] != '\0')
+        {
+            errx(EXIT_FAILURE,
+                 "ERROR Unknown option %s (use -n/--name, -t/--tag, "
+                 "-p/--path)",
+                 argv[k]);
         }
         else
         {
@@ -110,8 +233,11 @@ int main(int argc, char *argv[])
 
     // Push only root if path == root
     if (path != NULL && strcasecmp(path, "root") == 0)
+    {
+        __WarnTagIgnored(tag);
         return __StatusToExit(
             __PushRootOnly(name_commit != NULL ? name_commit : "Manual push"));
+    }
 
     // Get the path
     char path_allocated = 0;
@@ -174,6 +300,7 @@ int main(int argc, char *argv[])
     // "git add" it as a normal repository fails on the nested repositories)
     if (__IsRootPath(path))
     {
+        __WarnTagIgnored(tag);
         int status =
             __PushRootOnly(name_commit != NULL ? name_commit : "Manual push");
         if (path_allocated)
@@ -199,6 +326,14 @@ int main(int argc, char *argv[])
     char name_commit_root[SIZE_OF_STRING + strlen(name_commit)];
     snprintf(name_commit_root, sizeof(name_commit_root), "%s | %s", name_commit,
              repo_name);
+
+    // 0. Automatic "jarvis format" (off by default, see 'jarvis custom'). A
+    // problem is reported by FormatTree but never prevents the push.
+    if (IsAutoFormatEnabled())
+    {
+        UiInfo("Automatic format before the push...");
+        FormatTree(path);
+    }
 
     // 1. The repository itself. One after the other (not at the same time) :
     // the root repository records the new commit of the repository, and

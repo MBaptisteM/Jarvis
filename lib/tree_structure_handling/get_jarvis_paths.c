@@ -1,9 +1,4 @@
-#include <ctype.h>
-#include <get_jarvis_paths.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "get_jarvis_paths.h"
 
 // Get the commands_path depending on how the tool has been installed
 const char *GetCommandPath()
@@ -202,12 +197,23 @@ const char *GetDefaultLayerPrefix(const char *layer)
 #define DEFAULT_OTHERS_NAME "Others"
 #define CONFIG_PREFIX_MAX 32
 #define CONFIG_OTHERS_MAX 64
+#define CONFIG_FORMAT_MAX 2048
+#define CONFIG_EXTENSION_MAX 32
+
+// Extensions handled by "jarvis format" by default
+#define DEFAULT_FORMAT_EXTENSIONS                                              \
+    ".cpp,.cc,.cxx,.c++,.cp,.hpp,.hh,.hxx,.h++,.inline.hpp,.inl,.tpp,.txx,"    \
+    ".c,.h,.cu,.cuh,.ixx,.cppm,.mxx,.ccm,.js,.mjs,.cjs,.ts,.tsx,.cs,.java,"    \
+    ".json,.ipynb,.m,.mm,.proto,.protodevel,.textproto,.textpb,.txtpb,"        \
+    ".pb.txt,.asciipb,.td,.v,.vh,.sv,.svh"
 
 typedef struct
 {
     int enabled[3];
     char prefix[3][CONFIG_PREFIX_MAX + 1];
     char others[CONFIG_OTHERS_MAX + 1];
+    int auto_format;
+    char format_extensions[CONFIG_FORMAT_MAX + 1];
 } JarvisConfig;
 
 static const char *CONFIG_LAYERS[3] = { "year", "semester", "bimester" };
@@ -237,6 +243,80 @@ static int __ConfigValidPrefix(const char *prefix)
     return 1;
 }
 
+// Turn what the user typed into an extension : spaces are ignored, the case
+// too, and the leading dot is optional (" .C ++ ", "c++" -> ".c++"). NULL when
+// it can't be a valid extension. The result is malloc'd.
+char *NormalizeExtension(const char *input)
+{
+    if (input == NULL)
+        return NULL;
+
+    size_t length = strlen(input);
+    char *clean = malloc(length + 2);
+    if (clean == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    // Without spaces, lower case, and without the leading dot(s)
+    size_t k = 0;
+    clean[k++] = '.';
+    int leading = 1;
+    for (size_t i = 0; i < length; i++)
+    {
+        unsigned char c = (unsigned char)input[i];
+        if (isspace(c))
+            continue;
+        if (leading && c == '.')
+            continue;
+        leading = 0;
+        clean[k++] = (char)tolower(c);
+    }
+    clean[k] = '\0';
+
+    // At least one character after the dot, not too long
+    int valid = k > 1 && k - 1 <= CONFIG_EXTENSION_MAX;
+    for (size_t i = 1; valid && i < k; i++)
+    {
+        unsigned char c = (unsigned char)clean[i];
+        if (!isalnum(c) && c != '.' && c != '+' && c != '-' && c != '_')
+            valid = 0;
+        // No empty part (".c..h") and no trailing dot
+        if (c == '.' && (clean[i + 1] == '.' || clean[i + 1] == '\0'))
+            valid = 0;
+    }
+
+    if (!valid)
+    {
+        free(clean);
+        return NULL;
+    }
+    return clean;
+}
+
+// A list of extensions : ".c,.h" (each one already normalized, no duplicate
+// checking)
+static int __ConfigValidExtensions(const char *list)
+{
+    if (strlen(list) > CONFIG_FORMAT_MAX)
+        return 0;
+
+    char *copy = strdup(list);
+    if (copy == NULL)
+        err(EXIT_FAILURE, "strdup");
+
+    int valid = 1;
+    char *save = NULL;
+    for (char *token = strtok_r(copy, ",", &save); valid && token != NULL;
+         token = strtok_r(NULL, ",", &save))
+    {
+        char *normalized = NormalizeExtension(token);
+        valid = normalized != NULL && strcmp(normalized, token) == 0;
+        free(normalized);
+    }
+
+    free(copy);
+    return valid;
+}
+
 // The name of the "Others" folder is a single folder name
 static int __ConfigValidOthers(const char *name)
 {
@@ -262,6 +342,9 @@ static void __ConfigDefaults(JarvisConfig *config)
                  GetDefaultLayerPrefix(CONFIG_LAYERS[i]));
     }
     snprintf(config->others, sizeof(config->others), "%s", DEFAULT_OTHERS_NAME);
+    config->auto_format = 0;
+    snprintf(config->format_extensions, sizeof(config->format_extensions), "%s",
+             DEFAULT_FORMAT_EXTENSIONS);
 }
 
 // Path of the config file (malloc'd), NULL when the root repository is unknown
@@ -333,6 +416,12 @@ static int __ConfigWrite(const char *path, const JarvisConfig *config)
                           config->prefix[i])
             < 0;
     failed |= fprintf(file, "others_name = %s\n", config->others) < 0;
+    failed |=
+        fprintf(file, "auto_format = %s\n", config->auto_format ? "on" : "off")
+        < 0;
+    failed |=
+        fprintf(file, "format_extensions = %s\n", config->format_extensions)
+        < 0;
     failed |= fclose(file) != 0;
 
     if (!failed && rename(tmp, path) != 0)
@@ -380,6 +469,21 @@ static int __ConfigApply(JarvisConfig *config, const char *key,
         if (!__ConfigValidOthers(value))
             return EXIT_FAILURE;
         snprintf(config->others, sizeof(config->others), "%s", value);
+        return EXIT_SUCCESS;
+    }
+    if (strcmp(key, "auto_format") == 0)
+    {
+        if (strcmp(value, "on") != 0 && strcmp(value, "off") != 0)
+            return EXIT_FAILURE;
+        config->auto_format = strcmp(value, "on") == 0;
+        return EXIT_SUCCESS;
+    }
+    if (strcmp(key, "format_extensions") == 0)
+    {
+        if (!__ConfigValidExtensions(value))
+            return EXIT_FAILURE;
+        snprintf(config->format_extensions, sizeof(config->format_extensions),
+                 "%s", value);
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
@@ -443,7 +547,8 @@ void EnsureConfigFile(void)
 }
 
 // Change one setting ("layer_<layer>" = on/off, "prefix_<layer>" = text,
-// "others_name" = folder name) and save it. 0 on success.
+// "others_name" = folder name, "auto_format" = on/off, "format_extensions" =
+// ".c,.h" list) and save it. 0 on success.
 int SetConfigValue(const char *key, const char *value)
 {
     __ConfigLoad();
@@ -495,6 +600,31 @@ char *GetOthersFolderName(void)
     __ConfigLoad();
 
     char *value = strdup(jarvis_config.others);
+    if (value == NULL)
+        err(EXIT_FAILURE, "strdup");
+    return value;
+}
+
+// Is "jarvis format" run automatically before each "jarvis push" ? (off by
+// default)
+int IsAutoFormatEnabled(void)
+{
+    __ConfigLoad();
+    return jarvis_config.auto_format;
+}
+
+const char *GetDefaultFormatExtensions(void)
+{
+    return DEFAULT_FORMAT_EXTENSIONS;
+}
+
+// Extensions handled by "jarvis format", comma separated (malloc'd, the caller
+// must free it)
+char *GetFormatExtensions(void)
+{
+    __ConfigLoad();
+
+    char *value = strdup(jarvis_config.format_extensions);
     if (value == NULL)
         err(EXIT_FAILURE, "strdup");
     return value;
