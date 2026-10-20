@@ -1,4 +1,5 @@
 #include "pull.h"
+
 #include "current_handling.h"
 
 int ReadRootPath(char **value);
@@ -51,8 +52,7 @@ static char *__FindRootRepository(char *recorded_path)
     snprintf(repo_path, repo_path_size, "%s/EPITA-TPs", recorded_path);
     if (__IsGitRepositoryPath(repo_path))
     {
-        UiWarning("Correcting the saved root repository path to %s",
-                  repo_path);
+        UiWarning("Correcting the saved root repository path to %s", repo_path);
         WriteInfo("main_path", repo_path);
         free(recorded_path);
         return repo_path;
@@ -156,8 +156,8 @@ void __PullCurrent(void)
         }
     }
 
-    if (!__IsGitRepositoryPath(path) && current_was_root
-        && root_folder != NULL && __IsGitRepositoryPath(root_folder))
+    if (!__IsGitRepositoryPath(path) && current_was_root && root_folder != NULL
+        && __IsGitRepositoryPath(root_folder))
     {
         free(path);
         path = strdup(root_folder);
@@ -236,8 +236,8 @@ void __PullCurrent(void)
     }
     else if (!__IsGitRepositoryPath(path))
     {
-        errx(EXIT_FAILURE,
-             "ERROR The current path %s is not a Git repository.", path);
+        errx(EXIT_FAILURE, "ERROR The current path %s is not a Git repository.",
+             path);
     }
 
     __PullRepo(path);

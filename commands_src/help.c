@@ -56,15 +56,17 @@ static const Command COMMANDS[] = {
     { .name = "clone",
       .shortcut = "c",
       .group = "Repositories",
-      .usage = "jarvis clone [all | current/c/cu/cur/curr | <remote-repository>]",
+      .usage =
+          "jarvis clone [all | current/c/cu/cur/curr | <remote-repository>]",
       .summary = "Clone a repository and build its tree structure.",
       .details =
           "Clones the repository, places it in the tree structure, creates "
           "the structure of the TP for EPITA repositories, then pushes the "
           "modifications. The first call may install many packages.",
       .rows_title = "Arguments",
-      .rows = { { "all", "Find or clone the root repository (same as no "
-                         "argument)." },
+      .rows = { { "all",
+                  "Find or clone the root repository (same as no "
+                  "argument)." },
                 { "current (c/cu/cur/curr)",
                   "Pick one of your forge projects and clone it." },
                 { "<remote>", "Clone the specified remote repository." },
@@ -90,10 +92,12 @@ static const Command COMMANDS[] = {
       .rows = { { "old (anc/ancient/past)",
                   "Every finished repository (default)." },
                 { "all", "Every repository, finished or not." },
-                { "current (now)", "Only the repositories that are not "
-                                   "finished." },
-                { "<project>", "Every repository listed on the page of this "
-                               "project." },
+                { "current (now)",
+                  "Only the repositories that are not "
+                  "finished." },
+                { "<project>",
+                  "Every repository listed on the page of this "
+                  "project." },
                 { NULL, NULL } },
       .examples = { "jarvis fill", "jarvis fill all", "jarvis fill now",
                     "jarvis fill epita-prepa-computer-science", NULL } },
@@ -107,11 +111,13 @@ static const Command COMMANDS[] = {
           "Updates the whole tree, a specific repository, or the current one. "
           "Submodules are initialized and pulled recursively.",
       .rows_title = "Arguments",
-      .rows = { { "all", "Pull the root repository and every repository of "
-                         "the tree (default)." },
+      .rows = { { "all",
+                  "Pull the root repository and every repository of "
+                  "the tree (default)." },
                 { "current (c/cu/cur/curr)", "Pull the current repository." },
-                { "<repository>", "Pull this repository (if already "
-                                  "cloned)." },
+                { "<repository>",
+                  "Pull this repository (if already "
+                  "cloned)." },
                 { NULL, NULL } },
       .examples = { "jarvis pull", "jarvis pull current",
                     "jarvis pull my_project", NULL } },
@@ -121,15 +127,15 @@ static const Command COMMANDS[] = {
       .group = "Repositories",
       .usage = "jarvis push [root | current/c/cu/cur/curr | <path>]",
       .summary = "Commit and push a repository and the root repository.",
-      .details =
-          "Adds, commits and pushes a repository, and updates the root "
-          "repository at the same time. The commit name is generated "
-          "automatically unless one is given.",
+      .details = "Adds, commits and pushes a repository, and updates the root "
+                 "repository at the same time. The commit name is generated "
+                 "automatically unless one is given.",
       .rows_title = "Arguments",
       .rows = { { "root", "Push only the root repository." },
                 { "current (c/cu/cur/curr)", "Push the current repository." },
-                { "<path>", "Push the repository at this path (default: the "
-                            "current folder)." },
+                { "<path>",
+                  "Push the repository at this path (default: the "
+                  "current folder)." },
                 { NULL, NULL } },
       .examples = { "jarvis push", "jarvis push current", "jarvis push root",
                     NULL } },
@@ -145,10 +151,12 @@ static const Command COMMANDS[] = {
       .rows_title = "Arguments",
       .rows = { { "root", "Find the root repository (default)." },
                 { "current (c/cu/cur/curr)", "Find the current repository." },
-                { "<repo url>", "Find the local clone of this remote "
-                                "repository." },
-                { "<keyword>", "Find the repositories whose title contains "
-                               "this word." },
+                { "<repo url>",
+                  "Find the local clone of this remote "
+                  "repository." },
+                { "<keyword>",
+                  "Find the repositories whose title contains "
+                  "this word." },
                 { NULL, NULL } },
       .examples = { "jarvis find root", "jarvis find current",
                     "jarvis find firstname.name@git.forge.epita.fr:p/...",
@@ -167,10 +175,12 @@ static const Command COMMANDS[] = {
       .rows_title = "Arguments",
       .rows = { { "root", "Go to the root repository (default)." },
                 { "current (c/cu/cur/curr)", "Go to the current repository." },
-                { "<repo url>", "Go to the local clone of this remote "
-                                "repository." },
-                { "<keyword>", "Go to a repository whose title contains this "
-                               "word." },
+                { "<repo url>",
+                  "Go to the local clone of this remote "
+                  "repository." },
+                { "<keyword>",
+                  "Go to a repository whose title contains this "
+                  "word." },
                 { NULL, NULL } },
       .examples = { "jarvis go root", "jarvis go current",
                     "jarvis go \"trees\"", NULL } },
@@ -188,18 +198,38 @@ static const Command COMMANDS[] = {
           "applies the changes to the repositories already cloned (they are "
           "moved); Save also pushes the root repository.",
       .rows_title = "Menu",
-      .rows = { { "Layers", "Enable or disable Year, Semester and Bimester "
-                            "folders (default: Semester and Bimester)." },
-                { "Prefixes", "Text written before the number (default: Y, S, "
-                              "B)." },
-                { "Others", "Rename the folder used when the course can't "
-                            "be deduced (default: Others)." },
+      .rows = { { "Layers",
+                  "Enable or disable Year, Semester and Bimester "
+                  "folders (default: Semester and Bimester)." },
+                { "Prefixes",
+                  "Text written before the number (default: Y, S, "
+                  "B)." },
+                { "Others",
+                  "Rename the folder used when the course can't "
+                  "be deduced (default: Others)." },
                 { "Reset", "Go back to the default organization." },
-                { "Save", "Apply the changes to the tree and push the root "
-                          "repository." },
+                { "Save",
+                  "Apply the changes to the tree and push the root "
+                  "repository." },
                 { "Quit", "Apply the changes to the tree (no push)." },
                 { NULL, NULL } },
       .examples = { "jarvis custom", NULL } },
+
+    { .name = "format",
+      .shortcut = "fm",
+      .group = "Organization",
+      .usage = "jarvis format",
+      .summary = "Format the code of the current folder with clang-format.",
+      .details =
+          "Runs clang-format -i on every C, C++, Java, JavaScript, TypeScript, "
+          "C#, JSON, Objective-C, Protobuf, Verilog (and other languages "
+          "supported by clang-format) file of the current folder and all its "
+          "sub-folders. The .clang-format file closest to each file is used. "
+          ".git and node_modules folders are skipped. A file that can't be "
+          "formatted is reported but does not stop the others.",
+      .rows_title = "Arguments",
+      .rows = { { NULL, NULL } },
+      .examples = { "jarvis format", "j fm", NULL } },
 
     { .name = "erase",
       .shortcut = NULL,
@@ -449,11 +479,13 @@ static void __PrintGeneralHelp(void)
         __PanelBottom(width);
     }
 
-    fprintf(out, "\n %sType%s jarvis help COMMAND %sfor more information on a "
-                 "command.%s\n",
+    fprintf(out,
+            "\n %sType%s jarvis help COMMAND %sfor more information on a "
+            "command.%s\n",
             K_BORDER, K_RESET, K_BORDER, K_RESET);
-    fprintf(out, " %s\"j\" works instead of \"jarvis\" (ex : j c, j g, j pl)."
-                 "%s\n\n",
+    fprintf(out,
+            " %s\"j\" works instead of \"jarvis\" (ex : j c, j g, j pl)."
+            "%s\n\n",
             K_BORDER, K_RESET);
 }
 

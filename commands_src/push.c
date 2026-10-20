@@ -1,6 +1,5 @@
 #include "push.h"
 
-
 int ReadRootPath(char **value);
 int PushRepoStatus(char *repo_path, char *commit_name, char *tag);
 int PushRepoRootStatus(char *commit_name, int staging_failed);
@@ -111,8 +110,8 @@ int main(int argc, char *argv[])
 
     // Push only root if path == root
     if (path != NULL && strcasecmp(path, "root") == 0)
-        return __StatusToExit(__PushRootOnly(
-            name_commit != NULL ? name_commit : "Manual push"));
+        return __StatusToExit(
+            __PushRootOnly(name_commit != NULL ? name_commit : "Manual push"));
 
     // Get the path
     char path_allocated = 0;
@@ -175,8 +174,8 @@ int main(int argc, char *argv[])
     // "git add" it as a normal repository fails on the nested repositories)
     if (__IsRootPath(path))
     {
-        int status = __PushRootOnly(
-            name_commit != NULL ? name_commit : "Manual push");
+        int status =
+            __PushRootOnly(name_commit != NULL ? name_commit : "Manual push");
         if (path_allocated)
             free(path);
         return __StatusToExit(status);

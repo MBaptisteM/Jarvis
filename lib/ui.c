@@ -133,8 +133,8 @@ static void __Sanitize(char *s)
 
 static const char *__StripPrefix(const char *message)
 {
-    static const char *prefixes[] = { "ERROR: ", "ERROR ", "WARNING: ",
-                                      "WARNING ", NULL };
+    static const char *prefixes[] = { "ERROR: ", "ERROR ",
+                                      "WARNING: ", "WARNING ", NULL };
     for (int i = 0; prefixes[i] != NULL; i++)
         if (strncmp(message, prefixes[i], strlen(prefixes[i])) == 0)
             return message + strlen(prefixes[i]);
@@ -196,8 +196,8 @@ static void __Render(FILE *stream, UiKind kind, const char *title,
     int dashes = width - __Cols(title, strlen(title)) - 5;
     if (dashes < 1)
         dashes = 1;
-    fprintf(mem, "%s╭─ %s%s%s%s ", style.border, style.reset, style.title, title,
-            style.reset);
+    fprintf(mem, "%s╭─ %s%s%s%s ", style.border, style.reset, style.title,
+            title, style.reset);
     fprintf(mem, "%s", style.border);
     for (int i = 0; i < dashes; i++)
         fprintf(mem, "─");

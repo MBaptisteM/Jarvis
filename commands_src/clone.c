@@ -283,8 +283,8 @@ int main(int argc, char *argv[])
         // snprintf(command_clone, command_size, "git -C %s clone %s",
         // main_folder_path, argv[1]);
         snprintf(command_clone, command_size,
-                 "git -C \"%s\" submodule add --force \"%s\"",
-                 main_folder_path, argv[1]);
+                 "git -C \"%s\" submodule add --force \"%s\"", main_folder_path,
+                 argv[1]);
 
         // Several clones may run at the same time ("jarvis fill") : only one
         // at a time can touch the index and .gitmodules of the root repository
@@ -725,7 +725,8 @@ char **__GetRelavitvePath(char *repo_name, size_t *size)
         }
         return relative_path;
     }
-    // Layers chosen with "jarvis custom" (Year / Semester / Bimester), maybe none
+    // Layers chosen with "jarvis custom" (Year / Semester / Bimester), maybe
+    // none
     (*size) = GetLayerFolders(num_bimester, relative_path);
 
     return relative_path;

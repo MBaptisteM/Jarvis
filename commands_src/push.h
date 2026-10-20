@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 #include "TPs_handler.h"
+#include "current_handling.h"
 #include "info_file.h"
 #include "ui.h"
-#include "current_handling.h"
 
 #define COMMAND_TAG "tag="
 #define COMMAND_NAME "name="

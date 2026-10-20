@@ -1,6 +1,5 @@
-#include <get_jarvis_paths.h>
-
 #include <ctype.h>
+#include <get_jarvis_paths.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,7 +77,7 @@ char *GetInfoPath()
 }
 
 #ifndef REPO_NAME
-#define REPO_NAME "EPITA-TPs"
+#    define REPO_NAME "EPITA-TPs"
 #endif
 
 char *FindFileBFS(const char *file_to_find);
@@ -179,7 +178,6 @@ int ReadRootPath(char **value)
     free(stored);
     return EXIT_FAILURE;
 }
-
 
 // Default folder prefix of a layer ("year", "semester" or "bimester")
 const char *GetDefaultLayerPrefix(const char *layer)
@@ -324,13 +322,16 @@ static int __ConfigWrite(const char *path, const JarvisConfig *config)
     failed |= fprintf(file,
                       "# Jarvis tree configuration (shared with every Jarvis "
                       "using this root repository).\n"
-                      "# Edit it with 'jarvis custom'.\n") < 0;
+                      "# Edit it with 'jarvis custom'.\n")
+        < 0;
     for (int i = 0; i < 3; i++)
         failed |= fprintf(file, "layer_%s = %s\n", CONFIG_LAYERS[i],
-                          config->enabled[i] ? "on" : "off") < 0;
+                          config->enabled[i] ? "on" : "off")
+            < 0;
     for (int i = 0; i < 3; i++)
         failed |= fprintf(file, "prefix_%s = %s\n", CONFIG_LAYERS[i],
-                          config->prefix[i]) < 0;
+                          config->prefix[i])
+            < 0;
     failed |= fprintf(file, "others_name = %s\n", config->others) < 0;
     failed |= fclose(file) != 0;
 
@@ -359,7 +360,8 @@ static int __ConfigApply(JarvisConfig *config, const char *key,
     if (strncmp(key, "layer_", 6) == 0)
     {
         int index = __ConfigLayerIndex(key + 6);
-        if (index < 0 || (strcmp(value, "on") != 0 && strcmp(value, "off") != 0))
+        if (index < 0
+            || (strcmp(value, "on") != 0 && strcmp(value, "off") != 0))
             return EXIT_FAILURE;
         config->enabled[index] = strcmp(value, "on") == 0;
         return EXIT_SUCCESS;

@@ -73,8 +73,8 @@ static int __RelativeFolder(const char *url, char *out, size_t size)
     size_t used = 0;
     for (size_t i = 0; i < count; i++)
     {
-        int written = snprintf(out + used, size - used, "%s%s", i > 0 ? "/" : "",
-                               folders[i]);
+        int written = snprintf(out + used, size - used, "%s%s",
+                               i > 0 ? "/" : "", folders[i]);
         if (written > 0 && (size_t)written < size - used)
             used += (size_t)written;
         free(folders[i]);
@@ -376,7 +376,8 @@ void __FindEpitaUrlInTree(char *url)
     __TrimTrailing(main_folder_path);
 
     char relative_folder[SIZE_OF_STRING];
-    int is_others = __RelativeFolder(url, relative_folder, sizeof(relative_folder));
+    int is_others =
+        __RelativeFolder(url, relative_folder, sizeof(relative_folder));
 
     char stubborn[SIZE_OF_STRING];
     int stubborn_failed = __ExtractStubborn(url, stubborn);
@@ -518,7 +519,8 @@ int __ContainsWord(const char *haystack, const char *word)
     return 0;
 }
 
-// Recursively walk the tree starting at "path", printing the path of every folder
+// Recursively walk the tree starting at "path", printing the path of every
+// folder
 void __SearchTree(const char *path, const char *word, int *found_any)
 {
     DIR *dir = opendir(path);

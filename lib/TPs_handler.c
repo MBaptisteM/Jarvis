@@ -283,7 +283,6 @@ static const char *HEAL_SUBMODULES_SCRIPT =
     "git rm --cached -q -f -- \"$p\"; "
     "fi; done; true";
 
-
 // Every step reports its own problem and never stops the program
 
 // Run "git <argv>" without a shell. EXIT_SUCCESS if git succeeded.
@@ -315,7 +314,7 @@ static int __RunGit(char *const argv[], int quiet)
         if (errno != EINTR)
             return EXIT_FAILURE;
     return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? EXIT_SUCCESS
-                                                           : EXIT_FAILURE;
+                                                         : EXIT_FAILURE;
 }
 
 // First line printed by a command. EXIT_SUCCESS if it succeeded and printed
@@ -393,10 +392,12 @@ static int __PushHead(const char *label, int force_push, long *pushed)
 
     int result;
     if (tracked)
-        result = system(force_push ? "git push --force-with-lease" : "git push");
+        result =
+            system(force_push ? "git push --force-with-lease" : "git push");
     else
-        result = system(force_push ? "git push --force-with-lease -u origin HEAD"
-                                   : "git push -u origin HEAD");
+        result =
+            system(force_push ? "git push --force-with-lease -u origin HEAD"
+                              : "git push -u origin HEAD");
     if (result != 0)
     {
         UiError("Impossible to push the %s (see the git message above). If "
@@ -486,9 +487,8 @@ static int __StageAll(void)
         UiWarning("Impossible to hide the empty nested repositories, trying "
                   "to add anyway.");
 
-    int add_result = system(
-        "git add -A -- . ':(exclude)**/.git.jarvis-tmp' "
-        "':(exclude)**/.git.jarvis-tmp/**'");
+    int add_result = system("git add -A -- . ':(exclude)**/.git.jarvis-tmp' "
+                            "':(exclude)**/.git.jarvis-tmp/**'");
 
     // Always put the metadata back, even if the add failed
     int restore_result = system(RESTORE_COMMAND);
@@ -626,7 +626,7 @@ int PushRepoStatus(char *repo_path, char *commit_name, char *tag)
     {
         for (int attempt = 0; attempt < 50 && !tag_created; attempt++)
         {
-            char *tag_command[] = { "git", "tag", "-a",         tag,
+            char *tag_command[] = { "git", "tag",       "-a", tag,
                                     "-m",  commit_name, NULL };
             if (__RunGit(tag_command, 1) == EXIT_SUCCESS)
                 tag_created = 1;

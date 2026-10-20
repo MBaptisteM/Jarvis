@@ -12,11 +12,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "TPs_handler.h"
 #include "choice.h"
 #include "info_file.h"
 #include "ui.h"
-#include "TPs_handler.h"
-
 
 const char *GetDefaultLayerPrefix(const char *layer);
 int IsLayerEnabled(const char *layer);

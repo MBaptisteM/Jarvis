@@ -1,4 +1,5 @@
 #include "subject_handling.h"
+
 #include <ctype.h>
 
 // Get the subject

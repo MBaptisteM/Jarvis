@@ -1,6 +1,5 @@
 #include "get_documents.h"
 
-
 // download any page with it url -> .jarvis/subject.html
 int DowloadPage(char *url, char *file_name)
 {
@@ -115,7 +114,6 @@ int GetGivenFiles(char *repo_name)
     return exit_code; // 0 : success | 1 : failure
 }
 
-
 // Two ways to get the session cookies (auth.json) :
 //  - browser (default)
 //  - console
@@ -190,8 +188,9 @@ static int __AuthBrowser(const char *subject_path, const char *auth_path)
     char line[512];
     while (fgets(line, sizeof(line), script) != NULL)
     {
-        if (!shown && (strstr(line, "JARVIS_AUTH_WINDOW") != NULL
-                       || strstr(line, "connect to your forge account") != NULL))
+        if (!shown
+            && (strstr(line, "JARVIS_AUTH_WINDOW") != NULL
+                || strstr(line, "connect to your forge account") != NULL))
         {
             UiPanelBold(stdout, UI_SUCCESS, "Auth",
                         "Please connect to your forge account.\n"
@@ -299,8 +298,8 @@ static int __AuthConsole(const char *subject_path, const char *auth_path)
 
         if (code == 2 && attempt < AUTH_MAX_ATTEMPTS)
         {
-            UiWarning("Wrong username or password (%d/%d), try again.",
-                      attempt, AUTH_MAX_ATTEMPTS);
+            UiWarning("Wrong username or password (%d/%d), try again.", attempt,
+                      AUTH_MAX_ATTEMPTS);
             continue;
         }
 

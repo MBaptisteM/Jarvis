@@ -251,7 +251,8 @@ static void __CollectEpitaUrl(const char *url, const char *root)
         return;
     }
 
-    // Layers chosen with "jarvis custom" (Year / Semester / Bimester), maybe none
+    // Layers chosen with "jarvis custom" (Year / Semester / Bimester), maybe
+    // none
     char *target = strdup(root);
     if (target == NULL)
         err(EXIT_FAILURE, "strdup");

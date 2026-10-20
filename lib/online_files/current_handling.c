@@ -5,8 +5,8 @@
 
 int IsCurrentKeyword(const char *argument)
 {
-    return strcasecmp(argument, "current") == 0 || strcasecmp(argument, "c") == 0
-        || strcasecmp(argument, "cu") == 0
+    return strcasecmp(argument, "current") == 0
+        || strcasecmp(argument, "c") == 0 || strcasecmp(argument, "cu") == 0
         || strcasecmp(argument, "cur") == 0
         || strcasecmp(argument, "curr") == 0;
 }
@@ -405,13 +405,14 @@ static char *__FindGitUrlInPage(const char *file_path)
     return result;
 }
 
-// Find the EPITA login (firstname.name) without stopping : 1. in the urls Jarvis
-// already knows, 2. in the git email, 3. in the ssh banner of the forge
+// Find the EPITA login (firstname.name) without stopping : 1. in the urls
+// Jarvis already knows, 2. in the git email, 3. in the ssh banner of the forge
 static char *__FindForgeLogin(void)
 {
     char *login = NULL;
 
-    // 1. Urls already registered in the info file ("login@git.forge.epita.fr:...")
+    // 1. Urls already registered in the info file
+    // ("login@git.forge.epita.fr:...")
     char *info_path = GetInfoPath();
     FILE *info_file = fopen(info_path, "r");
     free(info_path);
@@ -548,7 +549,8 @@ char *ExtractRepo(char *url)
     }
     free(dotjarvis_path);
 
-    // 2. Deduce it : login@git.forge.epita.fr:p/<type>/<id>/<type>-<id>-<login>.git
+    // 2. Deduce it :
+    // login@git.forge.epita.fr:p/<type>/<id>/<type>-<id>-<login>.git
     if (repo_url == NULL)
     {
         UiWarning("Git url not found on the repository page, deducing it "

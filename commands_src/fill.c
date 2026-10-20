@@ -81,7 +81,6 @@ typedef struct
     size_t capacity;
 } NameList;
 
-
 static char *__Duplicate(const char *start, size_t length)
 {
     char *copy = malloc(length + 1);
@@ -241,9 +240,8 @@ static Scope __ParseScope(const char *argument, char *project, size_t size)
 {
     static const char *const old_words[] = { "old", "anc", "ancient", "past",
                                              NULL };
-    static const char *const current_words[] = { "current", "now", "c",
-                                                 "cu",       "cur", "curr",
-                                                 NULL };
+    static const char *const current_words[] = { "current", "now",  "c", "cu",
+                                                 "cur",     "curr", NULL };
 
     if (__IsOneOf(argument, old_words))
         return SCOPE_OLD;
@@ -405,8 +403,8 @@ static int __SplitRepoHref(const char *href, char *tenant, char *id,
          token = strtok_r(NULL, "/", &save))
         parts[count++] = token;
 
-    if (count != 3 || strcmp(parts[2], "root") != 0
-        || strlen(parts[0]) >= size || strlen(parts[1]) >= size)
+    if (count != 3 || strcmp(parts[2], "root") != 0 || strlen(parts[0]) >= size
+        || strlen(parts[1]) >= size)
         return 0;
 
     snprintf(tenant, size, "%s", parts[0]);
@@ -598,8 +596,8 @@ static int __FindFolder(const char *directory, const char *name, int depth)
 // git repository. Repositories are not entered.
 typedef struct
 {
-    const char *original;  // <tenant>-<id>-<login>
-    char prefix[32];       // 207-p-05-
+    const char *original; // <tenant>-<id>-<login>
+    char prefix[32]; // 207-p-05-
 } Target;
 
 static int __IsTarget(const char *name, const char *path, const Target *target)
@@ -730,7 +728,8 @@ static void __LoadSubmodules(const char *root)
         while (key_length > 0 && isspace((unsigned char)line[key_length - 1]))
             key_length--;
 
-        if (key_length == strlen("url") && strncmp(line, "url", key_length) == 0)
+        if (key_length == strlen("url")
+            && strncmp(line, "url", key_length) == 0)
         {
             free(url);
             url = __Duplicate(value, value_length);
@@ -761,8 +760,8 @@ static void __FreeSubmodules(void)
 // Already cloned : the url is a submodule of the root repository and its folder
 // is still there (this does not depend on the info file), or it is registered
 // in the info file and its folder is still in the tree.
-static int __AlreadyCloned(const Repo *repo, const char *login,
-                           const char *url, const char *root)
+static int __AlreadyCloned(const Repo *repo, const char *login, const char *url,
+                           const char *root)
 {
     if (root == NULL)
         return 0;
@@ -877,8 +876,7 @@ static void __Finish(Job *job, State state)
         __PrintLine("\033[90m", "•", "%s (already cloned)", label);
         break;
     case STATE_NO_REMOTE:
-        __PrintLine("\033[33m", "!", "%s (no repository found for you)",
-                    label);
+        __PrintLine("\033[33m", "!", "%s (no repository found for you)", label);
         break;
     default:
         __PrintLine("\033[31m", "✘", "%s (failed%s%s)", label,
@@ -923,7 +921,7 @@ static void __RemoveTree(const char *path)
 static int __IsProducedFile(const char *name)
 {
     static const char *const words[] = { "temp", "tmp", "given", NULL };
-    static const char *const suffixes[] = { ".html", ".tar", ".gz", ".tgz",
+    static const char *const suffixes[] = { ".html", ".tar", ".gz",  ".tgz",
                                             ".zip",  ".xz",  ".bz2", NULL };
 
     for (int i = 0; words[i] != NULL; i++)
@@ -1204,7 +1202,8 @@ int main(int argc, char *argv[])
 
     if (total == 0)
     {
-        UiInfo("No %s repository found, nothing to clone.", __ScopeLabel(scope));
+        UiInfo("No %s repository found, nothing to clone.",
+               __ScopeLabel(scope));
         __ReposFree(&repos);
         free(login);
         return EXIT_SUCCESS;
@@ -1232,8 +1231,9 @@ int main(int argc, char *argv[])
     if (ReadRootPath(&root) != EXIT_SUCCESS || root == NULL)
         root = GetOrCreateRepoRoot();
     if (root == NULL)
-        errx(EXIT_FAILURE, "ERROR Impossible to find or create the root "
-                           "repository");
+        errx(EXIT_FAILURE,
+             "ERROR Impossible to find or create the root "
+             "repository");
 
     // What the root repository already contains (read once, before the threads)
     __LoadSubmodules(root);
@@ -1355,8 +1355,9 @@ int main(int argc, char *argv[])
     FILE *stream = open_memstream(&report, &report_size);
     if (stream != NULL)
     {
-        fprintf(stream, "%zu cloned\n%zu already cloned\n%zu without "
-                        "repository for you\n%zu failed",
+        fprintf(stream,
+                "%zu cloned\n%zu already cloned\n%zu without "
+                "repository for you\n%zu failed",
                 counts[STATE_CLONED], counts[STATE_ALREADY],
                 counts[STATE_NO_REMOTE], counts[STATE_FAILED]);
 

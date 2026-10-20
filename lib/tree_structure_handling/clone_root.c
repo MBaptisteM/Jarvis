@@ -141,8 +141,7 @@ void __CloneParentRepo(void)
 
         if (__IsGitRepositoryPath(repo_path))
         {
-            UiSuccess("Found an existing root repository at:\n%s",
-                      repo_path);
+            UiSuccess("Found an existing root repository at:\n%s", repo_path);
 
             WriteInfo("main_path", repo_path);
             WriteInfo("current", repo_path);

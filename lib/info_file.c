@@ -121,7 +121,8 @@ static int __WriteInfoUnlocked(char *key, char *value)
         free(info_file_full_path);
         return EXIT_FAILURE;
     }
-    snprintf(temporary_path, temporary_path_size, "%s.tmp", info_file_full_path);
+    snprintf(temporary_path, temporary_path_size, "%s.tmp",
+             info_file_full_path);
     FILE *new_file = fopen(temporary_path, "w");
 
     if (new_file == NULL)

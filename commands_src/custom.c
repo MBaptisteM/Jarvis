@@ -37,7 +37,6 @@ static void __SetLayerPrefix(const char *layer, const char *prefix)
     __Save(key, prefix);
 }
 
-
 // Append a formatted text to a growing report (malloc'd, freed by the caller)
 static void __Report(char **report, size_t *size, const char *format, ...)
 {
@@ -87,7 +86,6 @@ static void __PrintCurrent(void)
         UiWarning("All the layers are disabled : the repositories go directly "
                   "in the root repository.");
 }
-
 
 // A prefix is written in folder names, so it must stay simple
 static int __IsValidPrefix(const char *prefix)
@@ -256,7 +254,6 @@ static int __PrefixesMenu(void)
     return changed;
 }
 
-
 static int __LayersMenu(void)
 {
     int changed = 0;
@@ -290,7 +287,6 @@ static int __LayersMenu(void)
     return changed;
 }
 
-
 static int __Reset(void)
 {
     UiQuestion("Reset the organization to the default one ?");
@@ -314,7 +310,6 @@ static int __Reset(void)
     UiSuccess("Default organization restored.");
     return 1;
 }
-
 
 // ---------------------------------------------------------------------------
 // Apply the organization to the existing tree
@@ -834,8 +829,8 @@ static int __ApplyOrganization(void)
     int moved = 0;
     char *report = NULL;
     size_t report_size = 0;
-    __Report(&report, &report_size, "%zu repositories found in %s",
-             repos.count, root);
+    __Report(&report, &report_size, "%zu repositories found in %s", repos.count,
+             root);
 
     for (size_t i = 0; i < repos.count; i++)
     {
@@ -887,8 +882,8 @@ static int __ApplyOrganization(void)
         {
             if (access(destination, F_OK) == 0)
             {
-                UiWarning("%s already exists, %s was not moved.",
-                          destination, repo);
+                UiWarning("%s already exists, %s was not moved.", destination,
+                          repo);
             }
             else if (__MakeDirs(target_parent) != EXIT_SUCCESS)
             {
@@ -903,18 +898,19 @@ static int __ApplyOrganization(void)
 
                 // "git mv" keeps .gitmodules and the index valid, plain
                 // rename for repositories that are not submodules
-                char *git_mv[] = { "git", "-C",   root,        "mv",
+                char *git_mv[] = { "git", "-C",         root,        "mv",
                                    "--",  (char *)repo, destination, NULL };
                 if (__RunProgram(git_mv) != EXIT_SUCCESS
                     && rename(repo, destination) != 0)
                 {
                     UiWarning("Impossible to move %s.", repo);
-                    }
+                }
                 else
                 {
-                    char *absorb[] = { "git", "-C",      root,
-                                       "submodule",      "absorbgitdirs",
-                                       "--",  destination, NULL };
+                    char *absorb[] = {
+                        "git",           "-C", root,        "submodule",
+                        "absorbgitdirs", "--", destination, NULL
+                    };
                     __RunProgram(absorb);
 
                     __Report(&report, &report_size, "\n%s\n  -> %s", repo,

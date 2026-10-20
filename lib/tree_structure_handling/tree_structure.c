@@ -1,4 +1,5 @@
 #include "tree_structure.h"
+
 #include <sys/wait.h>
 
 int IsEmpty(char *path)
@@ -52,8 +53,7 @@ int CleanFolder(char *folder_path)
                 err(EXIT_FAILURE, "fork");
             if (child == 0)
             {
-                execlp("rm", "rm", "-rf", "--", to_remove_path,
-                       (char *)NULL);
+                execlp("rm", "rm", "-rf", "--", to_remove_path, (char *)NULL);
                 _exit(EXIT_FAILURE);
             }
             int status;

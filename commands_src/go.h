@@ -12,11 +12,11 @@
 #include <unistd.h>
 
 #include "choice.h"
+#include "current_handling.h"
+#include "get_jarvis_paths.h"
 #include "info_file.h"
 #include "tree_structure.h"
 #include "ui.h"
-#include "get_jarvis_paths.h"
-#include "current_handling.h"
 
 #ifndef SEMESTER
 #    define SEMESTER "S"
@@ -26,6 +26,5 @@
 #endif
 
 #define OTHERS_FOLDER_NAME "Others"
-
 
 #endif /* GO_H */
