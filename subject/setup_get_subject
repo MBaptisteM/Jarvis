@@ -8,24 +8,49 @@ FILE_NAME="${4:-"subject.html"}"
 OTHER_PATH="${5:-}"
 
 if [ -z "$MODE" ] || [ -z "$URL" ] || [ -z "$SUBJECT_PATH" ]; then
-    echo "Usage: ./get_subject <auth|run> <url> <subject_path>"
+    echo "Usage: ./get_subject <auth|auth-console|run|download> <url> <subject_path>"
     exit 1
 fi
 
-PLAYWRIGHT_MARKER="$SUBJECT_PATH/.playwright_setup_done"
 NIX_PROFILE_PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin"
 export PATH="$NIX_PROFILE_PATH:$PATH"
 
-NEED_PLAYWRIGHT_NPM=0
-NEED_SETUP=0
 
-if ! command -v npm >/dev/null 2>&1; then
+#   - Node.js + the playwright npm package : every mode
+#   - Chromium : only the modes that open a page (auth, auth-console, run).
+#     "download" is a plain HTTP request with the saved session.
+case "$MODE" in
+    auth | auth-console | run) NEED_CHROMIUM=1 ;;
+    download) NEED_CHROMIUM=0 ;;
+    *)
+        echo "ERROR Unknown mode : $MODE" >&2
+        exit 1
+        ;;
+esac
+
+# Always shown (stderr), so the user knows what Jarvis is doing
+say()
+{
+    printf '\033[1;36m[Jarvis]\033[0m %s\n' "$*" >&2
+}
+
+# $1 = nixpkgs attribute (e.g. nodejs, chromium)
+install_with_nix()
+{
+    local package="$1"
     if ! command -v nix >/dev/null 2>&1; then
-        echo "npm is required. Install Node.js with: nix profile add nixpkgs#nodejs" >&2
+        echo "Nix is required to install $package. Install it with: nix profile add nixpkgs#$package" >&2
         exit 1
     fi
-    nix profile add nixpkgs#nodejs < /dev/null
+    say "Installing '$package' with Nix (nix profile add nixpkgs#$package)..."
+    nix profile add "nixpkgs#$package" < /dev/null
     export PATH="$NIX_PROFILE_PATH:$PATH"
+    say "'$package' installed."
+}
+
+
+if ! command -v npm >/dev/null 2>&1; then
+    install_with_nix nodejs
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
@@ -33,44 +58,46 @@ if ! command -v npm >/dev/null 2>&1; then
     exit 1
 fi
 
+
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
     npm init -y --prefix "$SUBJECT_PATH" > /dev/null < /dev/null
 fi
 
 if [ ! -d "$SUBJECT_PATH/node_modules/playwright" ]; then
-    NEED_PLAYWRIGHT_NPM=1
+    say "Installing the 'playwright' npm package in $SUBJECT_PATH..."
+    npm install playwright --prefix "$SUBJECT_PATH" --no-audit --no-fund < /dev/null
+    say "'playwright' installed."
 fi
 
-if [ ! -f "$PLAYWRIGHT_MARKER" ]; then
-    NEED_SETUP=1
-fi
 
-if [ "$NEED_PLAYWRIGHT_NPM" -eq 1 ]; then
-    npm install playwright --prefix "$SUBJECT_PATH" < /dev/null
-fi
+if [ "$NEED_CHROMIUM" -eq 1 ]; then
+    if [ -e /etc/NIXOS ] || grep -qi '^ID=nixos$' /etc/os-release 2>/dev/null; then
+        # NixOS : use the Chromium of Nix
+        if ! command -v chromium >/dev/null 2>&1 \
+            && ! command -v chromium-browser >/dev/null 2>&1; then
+            install_with_nix chromium
+        fi
 
-if [ -e /etc/NIXOS ] || grep -qi '^ID=nixos$' /etc/os-release 2>/dev/null; then
-    if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
-        if ! command -v nix >/dev/null 2>&1; then
-            echo "Chromium is required on NixOS. Install it with: nix profile add nixpkgs#chromium" >&2
+        if command -v chromium >/dev/null 2>&1; then
+            export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium)"
+        elif command -v chromium-browser >/dev/null 2>&1; then
+            export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium-browser)"
+        else
+            echo "Chromium was installed with Nix but is not available in PATH." >&2
             exit 1
         fi
-        nix profile add nixpkgs#chromium < /dev/null
-        export PATH="$NIX_PROFILE_PATH:$PATH"
-    fi
-
-    if command -v chromium >/dev/null 2>&1; then
-        export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium)"
-    elif command -v chromium-browser >/dev/null 2>&1; then
-        export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium-browser)"
     else
-        echo "Chromium was installed with Nix but is not available in PATH." >&2
-        exit 1
+        # Other systems : the Chromium downloaded by Playwright. Check the real
+        # file instead of a marker, the cache can be wiped between two sessions.
+        CHROMIUM_PATH="$(cd "$SUBJECT_PATH" \
+            && node -e "process.stdout.write(require('playwright').chromium.executablePath())" \
+            2>/dev/null || true)"
+        if [ -z "$CHROMIUM_PATH" ] || [ ! -e "$CHROMIUM_PATH" ]; then
+            say "Installing Chromium for Playwright (npx playwright install chromium)..."
+            (cd "$SUBJECT_PATH" && npx playwright install chromium < /dev/null)
+            say "Chromium installed."
+        fi
     fi
-elif [ "$NEED_SETUP" -eq 1 ]; then
-    (cd "$SUBJECT_PATH" && npx playwright install chromium < /dev/null)
-    touch "$PLAYWRIGHT_MARKER"
 fi
-
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH" "$FILE_NAME" "$OTHER_PATH"

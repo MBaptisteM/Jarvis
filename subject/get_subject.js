@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium, request: playwrightRequest } = require('playwright');
 const fs = require('fs');
 
 function launchBrowser(options) {
@@ -179,33 +179,31 @@ async function consoleLogin(page, url, username, password) {
 
 
   // Download the file if it exist (call only with .gz pages)
+  // Plain HTTP request with the saved session : no browser (Chromium) needed
   else if (mode === "download") {
     if (!fs.existsSync(auth_path)) {
       console.error("ERROR Impossible to find auth.json, please auth before");
       process.exit(1);
     }
 
-    const browser = await launchBrowser({ headless: true });
-    const context = await browser.newContext({
+    const context = await playwrightRequest.newContext({
       storageState: auth_path
     });
 
-    const request = context.request;
-
     try {
-      const response = await request.get(url);
+      const response = await context.get(url);
 
       // No file to download
       if (response.status() === 404) {
         // console.error("No given file for this TP.");
-        await browser.close();
+        await context.dispose();
         process.exit(1);
       }
 
       // HTTP error handling
       if (!response.ok()) {
         console.error(`HTTP ERROR : ${response.status()}`);
-        await browser.close();
+        await context.dispose();
         process.exit(-1);
       }
 
@@ -224,7 +222,7 @@ async function consoleLogin(page, url, username, password) {
       process.exit(-1);
     }
 
-    await browser.close();
+    await context.dispose();
   }
 
   else {

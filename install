@@ -134,7 +134,7 @@ is_epita_env() {
 
 if is_epita_env; then
     # Real data lives on AFS, ~/.jarvis is a symlink to it
-    JARVIS_AFS_PATH="$HOME/afs/.config/jarvis"
+    JARVIS_AFS_PATH="$HOME/afs/.confs/jarvis"
     JARVIS_DATA_PATH="$HOME/.jarvis"
     mkdir -p "$JARVIS_AFS_PATH"
 
@@ -152,7 +152,7 @@ if is_epita_env; then
 
     # Register jarvis in the EPITA dotfiles list (dot_list) so that ~/.jarvis
     # is restored at each boot. Idempotent, with a one-time backup.
-    EPITA_INSTALL_SH="$HOME/afs/.config/install.sh"
+    EPITA_INSTALL_SH="$HOME/afs/.confs/install.sh"
     LIST_RE='^(dot_list|do_list)="'
     if [ ! -f "$EPITA_INSTALL_SH" ]; then
         ui_panel warning "EPITA" "$EPITA_INSTALL_SH not found: jarvis not added to dot_list."
@@ -167,12 +167,6 @@ if is_epita_env; then
         ui_panel warning "EPITA" \
             "Unrecognized dot_list format in $EPITA_INSTALL_SH:" \
             "add 'jarvis' to it manually."
-    fi
-
-    # The dotfiles loop links ~/.<name> to <AFS>/.confs/<name>: make that
-    # target resolve to the Jarvis folder too, when .confs exists.
-    if [ -d "$HOME/afs/.confs" ] && [ ! -e "$HOME/afs/.confs/jarvis" ]; then
-        ln -s "$JARVIS_AFS_PATH" "$HOME/afs/.confs/jarvis"
     fi
 elif [ -d "$HOME/.config" ]; then
     JARVIS_DATA_PATH="$HOME/.config/.jarvis"
