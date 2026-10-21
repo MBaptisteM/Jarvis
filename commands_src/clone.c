@@ -1,5 +1,6 @@
 #include "clone.h"
 
+
 // Strictly parse the course id of an EPITA repository url.
 static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
                            size_t stubborn_size)

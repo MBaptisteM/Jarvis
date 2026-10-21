@@ -13,13 +13,21 @@ int EnsureDependencies(void)
     snprintf(cmd, sizeof(cmd), "\"%s/setup_get_subject\" setup \"%s\" \"%s\"",
              subject_path, URL, subject_path);
 
+    // Tell the user what is going on, so the first run does not look frozen
+    UiInfo("Checking the dependencies of Jarvis : Node.js, Playwright and "
+           "Chromium.\n"
+           "The first run downloads them, it can take a few minutes.");
     fflush(stdout);
+
     int status = system(cmd);
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
     {
         UiError("Impossible to install the dependencies of Jarvis.");
         return EXIT_FAILURE;
     }
+
+    UiSuccess("Dependencies are ready.");
+    fflush(stdout);
 
     return EXIT_SUCCESS;
 }
@@ -199,6 +207,10 @@ static int __AuthBrowser(const char *subject_path, const char *auth_path)
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "%s/./setup_get_subject auth %s %s",
              subject_path, URL, subject_path);
+
+    UiInfo("Opening the browser window (the first time, it can take a moment "
+           "to prepare it)...");
+    fflush(stdout);
 
     FILE *script = popen(cmd, "r");
     if (script == NULL)

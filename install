@@ -250,21 +250,22 @@ unset _jarvis_completion_function
 COMPLETION_EOF
 fi
 
+# EPITA : ~/.local is wiped at reboot, so keep a copy of the installed
+# commands on AFS (inside ~/.jarvis) and restore it when a shell starts.
 if is_epita_env; then
     PERSIST_PATH="$JARVIS_DATA_PATH/install"
+    rm -rf "$PERSIST_PATH"
     mkdir -p "$PERSIST_PATH/bin" "$PERSIST_PATH/lib" "$PERSIST_PATH/completions"
 
-    # Copie persistante (sur AFS) de tout ce qui est installé dans ~/.local
     cp "$BIN_PATH/jarvis" "$PERSIST_PATH/bin/"
     [ -f "$J_PATH" ] && cp "$J_PATH" "$PERSIST_PATH/bin/"
     cp -R "$LIB_PATH/." "$PERSIST_PATH/lib/"
     cp "$COMP_PATH/jarvis" "$PERSIST_PATH/completions/"
     [ -f "$COMP_PATH/j" ] && cp "$COMP_PATH/j" "$PERSIST_PATH/completions/"
 
-    # Script de restauration (exécuté par le shell au démarrage)
     cat > "$JARVIS_DATA_PATH/restore" <<'RESTORE_EOF'
 #!/bin/sh
-# Jarvis : remet les commandes en place après le nettoyage du home local (EPITA)
+# Jarvis : put the commands back after the local home was wiped (EPITA)
 P="$HOME/.jarvis/install"
 [ -d "$P" ] || exit 0
 mkdir -p "$HOME/.local/bin" "$HOME/.local/lib/jarvis" \
@@ -275,17 +276,16 @@ cp -a "$P/completions/." "$HOME/.local/share/bash-completion/completions/"
 RESTORE_EOF
     chmod +x "$JARVIS_DATA_PATH/restore"
 
-    # Ligne de démarrage : ne restaure que si la commande a disparu
     if [ "$shell_name" = "fish" ]; then
         restore_line='test -x "$HOME/.local/bin/jarvis"; or sh "$HOME/.jarvis/restore"'
     else
         restore_line='[ -x "$HOME/.local/bin/jarvis" ] || sh "$HOME/.jarvis/restore"'
     fi
     if ! grep -Fqx "$restore_line" "$startup_file"; then
-        # Placée en TOUT DÉBUT du fichier, avant les lignes PATH / intégration
+        # First line of the startup file, before the PATH / integration lines
         tmp_rc=$(mktemp)
         { printf '%s\n' "$restore_line"; cat "$startup_file"; } > "$tmp_rc"
-        cat "$tmp_rc" > "$startup_file"   # cat > préserve un éventuel symlink
+        cat "$tmp_rc" > "$startup_file"
         rm -f "$tmp_rc"
     fi
 fi
