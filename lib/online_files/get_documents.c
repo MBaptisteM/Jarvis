@@ -1,5 +1,29 @@
 #include "get_documents.h"
 
+// Install (visibly) what setup_get_subject needs : Node.js, playwright, Chromium.
+// Done once, in the foreground, before any background download starts : the
+// installation output goes straight to the terminal and the parallel
+// children do not install the same packages at the same time.
+// EXIT_SUCCESS if everything is ready.
+int EnsureDependencies(void)
+{
+    const char *subject_path = GetSubjectFolderPath();
+
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "\"%s/setup_get_subject\" setup \"%s\" \"%s\"",
+             subject_path, URL, subject_path);
+
+    fflush(stdout);
+    int status = system(cmd);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    {
+        UiError("Impossible to install the dependencies of Jarvis.");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
 // download any page with it url -> .jarvis/subject.html
 int DowloadPage(char *url, char *file_name)
 {

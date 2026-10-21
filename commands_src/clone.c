@@ -1,9 +1,5 @@
 #include "clone.h"
 
-char *GetOthersFolderName(void);
-int JarvisLockAcquire(const char *name);
-void JarvisLockRelease(int fd);
-
 // Strictly parse the course id of an EPITA repository url.
 static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
                            size_t stubborn_size)
@@ -73,7 +69,13 @@ int main(int argc, char *argv[])
 
     if (IsCurrentKeyword(argv[1]))
     {
-        // Get the current repository
+        // Get the current repository (the pages are downloaded in parallel :
+        // the dependencies must be installed before, once)
+        if (EnsureDependencies() != EXIT_SUCCESS)
+            return EXIT_FAILURE;
+
+        UiInfo("Looking for your current repositories on the forge...");
+        fflush(stdout);
         current_repo_url = GetCurrentRepo();
         if (current_repo_url == NULL)
         {
@@ -102,6 +104,14 @@ int main(int argc, char *argv[])
     }
     else
     {
+        UiInfo("Repository to clone :\n%s%s", URL, GetLocalUrlRepo(argv[1]));
+
+        // Install the dependencies here, in the foreground : the output is
+        // visible and the background downloads below do not install them
+        // at the same time
+        if (EnsureDependencies() != EXIT_SUCCESS)
+            return EXIT_FAILURE;
+
         // Do it here to avoid multithreading problems
         char auth_path[512];
         snprintf(auth_path, sizeof(auth_path), "%s/auth.json",
@@ -115,6 +125,8 @@ int main(int argc, char *argv[])
     }
 
     // Preload subject and given files
+    UiInfo("Downloading the subject and the given files in the background...");
+    fflush(stdout);
     pid_t pid_get_given_files = fork();
     if (pid_get_given_files == 0)
     {
@@ -135,6 +147,8 @@ int main(int argc, char *argv[])
     }
 
     // CREATE PATH
+    UiInfo("Looking for the root repository (can take a few seconds)...");
+    fflush(stdout);
     char *main_folder_path = GetOrCreateRepoRoot();
     if (main_folder_path == NULL)
         return EXIT_FAILURE;
@@ -277,6 +291,8 @@ int main(int argc, char *argv[])
         __PrintPages(local_url_repo);
 
         // CLONE
+        UiInfo("Cloning %s...", argv[1]);
+        fflush(stdout);
         size_t command_size =
             size_main_folder_path + strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];

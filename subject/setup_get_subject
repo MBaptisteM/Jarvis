@@ -8,7 +8,7 @@ FILE_NAME="${4:-"subject.html"}"
 OTHER_PATH="${5:-}"
 
 if [ -z "$MODE" ] || [ -z "$URL" ] || [ -z "$SUBJECT_PATH" ]; then
-    echo "Usage: ./get_subject <auth|auth-console|run|download> <url> <subject_path>"
+    echo "Usage: ./get_subject <setup|auth|auth-console|run|download> <url> <subject_path>"
     exit 1
 fi
 
@@ -20,7 +20,7 @@ export PATH="$NIX_PROFILE_PATH:$PATH"
 #   - Chromium : only the modes that open a page (auth, auth-console, run).
 #     "download" is a plain HTTP request with the saved session.
 case "$MODE" in
-    auth | auth-console | run) NEED_CHROMIUM=1 ;;
+    auth | auth-console | run | setup) NEED_CHROMIUM=1 ;;
     download) NEED_CHROMIUM=0 ;;
     *)
         echo "ERROR Unknown mode : $MODE" >&2
@@ -48,6 +48,10 @@ install_with_nix()
     say "'$package' installed."
 }
 
+
+if [ "$MODE" = "setup" ]; then
+    say "Checking the dependencies (Node.js, playwright, Chromium)..."
+fi
 
 if ! command -v npm >/dev/null 2>&1; then
     install_with_nix nodejs
@@ -98,6 +102,12 @@ if [ "$NEED_CHROMIUM" -eq 1 ]; then
             say "Chromium installed."
         fi
     fi
+fi
+
+# "setup" only installs what is missing, nothing to run afterwards
+if [ "$MODE" = "setup" ]; then
+    say "Dependencies ready."
+    exit 0
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH" "$FILE_NAME" "$OTHER_PATH"
