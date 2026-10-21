@@ -360,6 +360,8 @@ int main(int argc, char *argv[])
         switch (choice)
         {
         case 0:
+            UiInfo("Waiting for the subject and the given files...");
+            fflush(stdout);
             AddGivenFilesUsefulParts(repo_path, pid_get_given_files);
 
             CreateSubjectElements(repo_path, pid_get_subjects);
@@ -369,6 +371,8 @@ int main(int argc, char *argv[])
 
             if (need_to_be_renamed)
             {
+                UiInfo("Waiting for the subject to be downloaded...");
+                fflush(stdout);
                 int subject_status;
                 if (waitpid(pid_get_subjects, &subject_status, 0) >= 0
                     && WIFEXITED(subject_status)
@@ -390,6 +394,8 @@ int main(int argc, char *argv[])
                      "check the permissions.\n",
                      repo_path);
 
+            UiInfo("Waiting for the subject and the given files...");
+            fflush(stdout);
             UncompressGivenFiles(repo_path, pid_get_given_files);
 
             CreateSubjectElements(repo_path, pid_get_subjects);
@@ -400,6 +406,8 @@ int main(int argc, char *argv[])
     }
     else
     {
+        UiInfo("Waiting for the subject and the given files...");
+        fflush(stdout);
         UncompressGivenFiles(repo_path, pid_get_given_files);
 
         CreateSubjectElements(repo_path, pid_get_subjects);
@@ -410,7 +418,11 @@ int main(int argc, char *argv[])
     if (need_to_be_renamed)
     {
         if (__ParseCourseId(argv[1], NULL, NULL, 0) == EXIT_SUCCESS)
+        {
+            UiInfo("Renaming the repository...");
+            fflush(stdout);
             __RenameRepo(repo_path, argv[1]);
+        }
         else
             WriteInfo(argv[1], repo_name);
     }
@@ -425,6 +437,9 @@ int main(int argc, char *argv[])
 
     free(name_repo);
     free(main_folder_path);
+
+    UiInfo("Pushing the repositories to the forge...");
+    fflush(stdout);
 
     // Push the repos (parent & child (if necessary))
     // ("jarvis fill" pushes the root repository once, after all the clones)

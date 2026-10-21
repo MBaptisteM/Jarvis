@@ -1,9 +1,205 @@
 #include "get_documents.h"
 
+#define SPINNER_LOG_MAX 16384
+#define SPINNER_FRAME_MS 100
+
+// Terminal width (80 when unknown)
+static int __TerminalWidth(void)
+{
+    struct winsize size;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 20)
+        return size.ws_col;
+    return 80;
+}
+
+// One frame : "<spinner> <label> : <last line written by the command>"
+static void __DrawSpinner(size_t frame, const char *label, const char *last)
+{
+    static const char *frames[] = { "|", "/", "-", "\\" };
+
+    int room = __TerminalWidth() - (int)strlen(label) - 6;
+
+    printf("\r\033[K\033[36m%s\033[0m %s", frames[frame % 4], label);
+    if (room > 8 && last[0] != '\0')
+    {
+        size_t length = strlen(last);
+        if (length > (size_t)room)
+        {
+            length = (size_t)room;
+            // Do not cut a UTF-8 character in half
+            while (length > 0 && ((unsigned char)last[length] & 0xC0) == 0x80)
+                length--;
+        }
+        printf(" \033[90m: %.*s\033[0m", (int)length, last);
+    }
+    fflush(stdout);
+}
+
+// Run a shell command while showing a spinner and the last line of its output,
+// so the user can see that something is happening (installation, download...).
+// Without a terminal (pipe, script) the output is simply passed through.
+// The output of a failed command is displayed. Returns the exit code of the
+// command (-1 if it could not be run).
+static int __RunWithSpinner(const char *label, const char *cmd)
+{
+    int interactive = isatty(STDOUT_FILENO);
+
+    int fds[2];
+    if (pipe(fds) != 0)
+        return -1;
+
+    fflush(stdout);
+    fflush(stderr);
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        close(fds[0]);
+        close(fds[1]);
+        return -1;
+    }
+    if (pid == 0)
+    {
+        close(fds[0]);
+        // Nobody can answer a question while the spinner is running
+        int null_fd = open("/dev/null", O_RDONLY);
+        if (null_fd >= 0)
+        {
+            dup2(null_fd, STDIN_FILENO);
+            close(null_fd);
+        }
+        dup2(fds[1], STDOUT_FILENO);
+        dup2(fds[1], STDERR_FILENO);
+        close(fds[1]);
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+    close(fds[1]);
+
+    if (!interactive)
+    {
+        printf("%s...\n", label);
+        fflush(stdout);
+    }
+
+    char *log = interactive ? malloc(SPINNER_LOG_MAX + 1) : NULL;
+    size_t log_length = 0;
+    char line[512];
+    size_t line_length = 0;
+    char last[512] = "";
+    int in_escape = 0;
+
+    size_t frame = 0;
+    unsigned reads = 0;
+    if (interactive)
+        __DrawSpinner(frame++, label, last);
+
+    struct pollfd pfd = { fds[0], POLLIN, 0 };
+    int open_pipe = 1;
+    while (open_pipe)
+    {
+        int ready = poll(&pfd, 1, SPINNER_FRAME_MS);
+        if (ready < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
+        if (ready > 0)
+        {
+            char buf[512];
+            ssize_t count = read(fds[0], buf, sizeof(buf));
+            if (count < 0 && errno == EINTR)
+                continue;
+
+            if (count <= 0)
+                open_pipe = 0;
+            else if (!interactive)
+            {
+                fwrite(buf, 1, (size_t)count, stdout);
+                fflush(stdout);
+            }
+            else
+            {
+                // Keep the end of the output, shown if the command fails
+                if (log != NULL)
+                {
+                    size_t size = (size_t)count;
+                    if (log_length + size > SPINNER_LOG_MAX)
+                    {
+                        size_t drop = log_length + size - SPINNER_LOG_MAX;
+                        memmove(log, log + drop, log_length - drop);
+                        log_length -= drop;
+                    }
+                    memcpy(log + log_length, buf, size);
+                    log_length += size;
+                }
+
+                // Remember the last line (colors and control codes removed)
+                for (ssize_t i = 0; i < count; i++)
+                {
+                    unsigned char c = (unsigned char)buf[i];
+                    if (in_escape == 1)
+                        in_escape = c == '[' ? 2 : 0;
+                    else if (in_escape == 2)
+                    {
+                        if (c >= '@' && c <= '~')
+                            in_escape = 0;
+                    }
+                    else if (c == 0x1b)
+                        in_escape = 1;
+                    else if (c == '\n' || c == '\r')
+                    {
+                        if (line_length > 0)
+                        {
+                            line[line_length] = '\0';
+                            memcpy(last, line, line_length + 1);
+                            line_length = 0;
+                        }
+                    }
+                    else if (c >= 0x20 && line_length < sizeof(line) - 1)
+                        line[line_length++] = (char)c;
+                }
+            }
+        }
+
+        // No clock needed : one frame at each pause of the command (poll
+        // timeout), and one every few reads when it writes without stopping
+        if (interactive && open_pipe && (ready == 0 || ++reads % 8 == 0))
+            __DrawSpinner(frame++, label, last);
+    }
+    close(fds[0]);
+
+    int status = 0;
+    pid_t waited;
+    do
+        waited = waitpid(pid, &status, 0);
+    while (waited < 0 && errno == EINTR);
+
+    int code = (waited >= 0 && WIFEXITED(status)) ? WEXITSTATUS(status) : -1;
+
+    if (interactive)
+    {
+        printf("\r\033[K");
+        if (code != 0 && log != NULL && log_length > 0)
+        {
+            log[log_length] = '\0';
+            fputs(log, stdout);
+            if (log[log_length - 1] != '\n')
+                putchar('\n');
+        }
+        fflush(stdout);
+    }
+    free(log);
+
+    return code;
+}
+
 // Install (visibly) what setup_get_subject needs : Node.js, playwright, Chromium.
 // Done once, in the foreground, before any background download starts : the
-// installation output goes straight to the terminal and the parallel
-// children do not install the same packages at the same time.
+// parallel children do not install the same packages at the same time.
+// A spinner and the last line of the installation output are displayed, so the
+// first run does not look frozen.
 // EXIT_SUCCESS if everything is ready.
 int EnsureDependencies(void)
 {
@@ -13,14 +209,11 @@ int EnsureDependencies(void)
     snprintf(cmd, sizeof(cmd), "\"%s/setup_get_subject\" setup \"%s\" \"%s\"",
              subject_path, URL, subject_path);
 
-    // Tell the user what is going on, so the first run does not look frozen
-    UiInfo("Checking the dependencies of Jarvis : Node.js, Playwright and "
-           "Chromium.\n"
+    UiInfo("Preparing Jarvis : Node.js, Playwright and Chromium.\n"
            "The first run downloads them, it can take a few minutes.");
     fflush(stdout);
 
-    int status = system(cmd);
-    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    if (__RunWithSpinner("Checking the dependencies", cmd) != 0)
     {
         UiError("Impossible to install the dependencies of Jarvis.");
         return EXIT_FAILURE;

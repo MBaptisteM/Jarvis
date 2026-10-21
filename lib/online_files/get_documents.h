@@ -9,6 +9,10 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/ioctl.h>
 
 #include "choice.h"
 #include "ui.h"
