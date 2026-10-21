@@ -125,7 +125,56 @@ make --silent
 BIN_PATH="$HOME/.local/bin"
 LIB_PATH="$HOME/.local/lib/jarvis"
 COMP_PATH="$HOME/.local/share/bash-completion/completions"
-if [ -d "$HOME/.config" ]; then
+
+# EPITA environment: the local home is wiped on reboot, only ~/afs persists.
+# Detected by the presence of the ~/afs folder.
+is_epita_env() {
+    [ -d "$HOME/afs" ]
+}
+
+if is_epita_env; then
+    # Real data lives on AFS, ~/.jarvis is a symlink to it
+    JARVIS_AFS_PATH="$HOME/afs/.config/jarvis"
+    JARVIS_DATA_PATH="$HOME/.jarvis"
+    mkdir -p "$JARVIS_AFS_PATH"
+
+    if [ -L "$JARVIS_DATA_PATH" ]; then
+        # Already a symlink: (re)point it to the AFS folder
+        ln -sfn "$JARVIS_AFS_PATH" "$JARVIS_DATA_PATH"
+    else
+        if [ -e "$JARVIS_DATA_PATH" ]; then
+            # Existing real folder: move its content to AFS, then replace it
+            cp -a "$JARVIS_DATA_PATH"/. "$JARVIS_AFS_PATH"/
+            rm -rf "$JARVIS_DATA_PATH"
+        fi
+        ln -s "$JARVIS_AFS_PATH" "$JARVIS_DATA_PATH"
+    fi
+
+    # Register jarvis in the EPITA dotfiles list (dot_list) so that ~/.jarvis
+    # is restored at each boot. Idempotent, with a one-time backup.
+    EPITA_INSTALL_SH="$HOME/afs/.config/install.sh"
+    LIST_RE='^(dot_list|do_list)="'
+    if [ ! -f "$EPITA_INSTALL_SH" ]; then
+        ui_panel warning "EPITA" "$EPITA_INSTALL_SH not found: jarvis not added to dot_list."
+    elif grep -Eq "${LIST_RE}([^\"]* )?jarvis( [^\"]*)?\"" "$EPITA_INSTALL_SH"; then
+        :  # already registered
+    elif grep -Eq "${LIST_RE}[^\"]*\"[[:space:]]*\$" "$EPITA_INSTALL_SH"; then
+        [ -e "$EPITA_INSTALL_SH.bak" ] || cp "$EPITA_INSTALL_SH" "$EPITA_INSTALL_SH.bak"
+        sed -E -i 's/^((dot_list|do_list)="[^"]*)"[[:space:]]*$/\1 jarvis"/' \
+            "$EPITA_INSTALL_SH"
+        ui_panel info "EPITA" "Added jarvis to dot_list in $EPITA_INSTALL_SH"
+    else
+        ui_panel warning "EPITA" \
+            "Unrecognized dot_list format in $EPITA_INSTALL_SH:" \
+            "add 'jarvis' to it manually."
+    fi
+
+    # The dotfiles loop links ~/.<name> to <AFS>/.confs/<name>: make that
+    # target resolve to the Jarvis folder too, when .confs exists.
+    if [ -d "$HOME/afs/.confs" ] && [ ! -e "$HOME/afs/.confs/jarvis" ]; then
+        ln -s "$JARVIS_AFS_PATH" "$HOME/afs/.confs/jarvis"
+    fi
+elif [ -d "$HOME/.config" ]; then
     JARVIS_DATA_PATH="$HOME/.config/.jarvis"
 else
     JARVIS_DATA_PATH="$HOME/.jarvis"

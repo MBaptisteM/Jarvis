@@ -749,6 +749,17 @@ int GetDotJarvisPath(char **path)
 
         char config_path[512];
         struct stat config_stat;
+
+        // EPITA : ~/.jarvis is a symlink to ~/afs/.config/jarvis
+        char link_path[512];
+        snprintf(link_path, sizeof(link_path), "%s/.jarvis", home);
+        if (lstat(link_path, &config_stat) == 0
+            && S_ISLNK(config_stat.st_mode))
+        {
+            snprintf(*path, 512, "%s", link_path);
+            return EXIT_SUCCESS;
+        }
+
         snprintf(config_path, sizeof(config_path), "%s/.config", home);
         if (stat(config_path, &config_stat) == 0
             && S_ISDIR(config_stat.st_mode))
