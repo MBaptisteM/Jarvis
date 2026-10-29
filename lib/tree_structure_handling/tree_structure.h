@@ -12,6 +12,7 @@
 
 #define MAX_PATH_SIZE 4096
 #define MARKED_FILE_NAME ".jarvis_mark"
+#define ROOT_SEARCH_DEPTH 3
 
 int IsEmpty(char *path);
 int CleanFolder(char *folder_path);

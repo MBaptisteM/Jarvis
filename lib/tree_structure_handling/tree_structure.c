@@ -151,6 +151,88 @@ char *FindFileBFS(const char *file_to_find)
     return NULL;
 }
 
+
+// Does <parent>/<name>/.git exist ?
+static int __IsRepoNamed(const char *parent, const char *name)
+{
+    char path[MAX_PATH_SIZE];
+    snprintf(path, sizeof(path), "%s/%s/.git", parent, name);
+    struct stat st;
+    return lstat(path, &st) == 0;
+}
+
+// Look for <name> (a git repository) exactly "depth" levels under "dir".
+// Returns the parent folder of the match (malloc'd), NULL otherwise.
+static char *__SearchAtDepth(const char *dir, const char *name, int depth)
+{
+    DIR *d = opendir(dir);
+    if (d == NULL)
+        return NULL;
+
+    char *result = NULL;
+    struct dirent *entry;
+    while (result == NULL && (entry = readdir(d)) != NULL)
+    {
+        // ".", "..", .git, .cache, .local ...
+        if (entry->d_name[0] == '.')
+            continue;
+
+        char path[MAX_PATH_SIZE];
+        snprintf(path, sizeof(path), "%s/%s", dir, entry->d_name);
+
+        struct stat st;
+        if (lstat(path, &st) != 0 || !S_ISDIR(st.st_mode))
+            continue;
+
+        if (depth == 1)
+        {
+            if (strcmp(entry->d_name, name) == 0 && __IsRepoNamed(dir, name))
+            {
+                result = strdup(dir);
+                if (result == NULL)
+                    err(EXIT_FAILURE, "strdup");
+            }
+        }
+        else
+            result = __SearchAtDepth(path, name, depth - 1);
+    }
+
+    closedir(d);
+    return result;
+}
+
+// Fast search of the root repository : from the current folder, then from
+// $HOME, at most "max_depth" layers deep (closest match first). Returns the
+// parent folder of the repository (same contract as FindFileBFS), NULL if not
+// found.
+char *FindRootRepoNear(const char *name, int max_depth)
+{
+    char *cwd = getcwd(NULL, 0);
+    const char *home = getenv("HOME");
+
+    const char *starts[2] = { cwd, home };
+    for (int s = 0; s < 2; s++)
+    {
+        if (starts[s] == NULL || starts[s][0] == '\0')
+            continue;
+        if (s == 1 && cwd != NULL && strcmp(cwd, home) == 0)
+            continue; // already searched
+
+        for (int depth = 1; depth <= max_depth; depth++)
+        {
+            char *found = __SearchAtDepth(starts[s], name, depth);
+            if (found != NULL)
+            {
+                free(cwd);
+                return found;
+            }
+        }
+    }
+
+    free(cwd);
+    return NULL;
+}
+
 // Check if the given element is a directory
 int IsDirectory(const char *path)
 {

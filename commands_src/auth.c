@@ -15,6 +15,10 @@ int main()
 {
     int result = Auth();
 
+    // Not signed in : nothing can be cloned, stop here
+    if (result != EXIT_SUCCESS)
+        return result;
+
     __CloneParentRepo();
 
     return result;

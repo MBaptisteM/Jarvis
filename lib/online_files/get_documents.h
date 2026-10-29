@@ -27,5 +27,6 @@ int DowloadPage(char *url, char *file_name);
 int GetSubject(char *repo_name);
 int GetGivenFiles(char *repo_name);
 int Auth();
+int Reauth(void);
 const char *GetLocalUrlRepo(char *repo_name);
 int EnsureDependencies(void);

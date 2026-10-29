@@ -75,7 +75,7 @@ char *GetInfoPath()
 #    define REPO_NAME "EPITA-TPs"
 #endif
 
-char *FindFileBFS(const char *file_to_find);
+char *FindRootRepoNear(const char *name, int max_depth);
 
 // Is there a .git inside this folder ?
 static int __HasGitFolder(const char *path)
@@ -96,7 +96,7 @@ static int __HasGitFolder(const char *path)
 // '/', or NULL if it can't be found anywhere.
 static char *__SearchRootRepo(void)
 {
-    char *parent = FindFileBFS(REPO_NAME);
+    char *parent = FindRootRepoNear(REPO_NAME, 3);
     if (parent == NULL)
         return NULL;
 

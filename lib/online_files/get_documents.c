@@ -1,5 +1,7 @@
 #include "get_documents.h"
 
+#include <ctype.h>
+
 #define SPINNER_LOG_MAX 16384
 #define SPINNER_FRAME_MS 100
 
@@ -241,8 +243,9 @@ int DowloadPage(char *url, char *file_name)
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
     // If not already Auth
-    if (access(auth_path, F_OK) != 0)
-        Auth();
+    if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
+        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
+                           "and sign in to the forge.");
 
     char cmd_subject[1024];
     snprintf(cmd_subject, sizeof(cmd_subject),
@@ -280,10 +283,9 @@ int GetSubject(char *repo_name)
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
     // If not already Auth
-    if (access(auth_path, F_OK) != 0)
-    {
-        Auth();
-    }
+    if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
+        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
+                           "and sign in to the forge.");
 
     // Get subject
     char cmd_subject[1024];
@@ -319,10 +321,9 @@ int GetGivenFiles(char *repo_name)
     snprintf(auth_path, sizeof(auth_path), "%s/auth.json", subject_path);
 
     // If not already Auth
-    if (access(auth_path, F_OK) != 0)
-    {
-        Auth();
-    }
+    if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
+        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
+                           "and sign in to the forge.");
 
     // Get given files
     char cmd_given_files[1024];
@@ -345,6 +346,61 @@ int GetGivenFiles(char *repo_name)
 
 #define AUTH_MAX_ATTEMPTS 3
 #define AUTH_INPUT_MAX 256
+#define AUTH_CHECK_FILE "AuthCheck.html"
+#define AUTH_CHECK_MAX (2 * 1024 * 1024)
+
+// Check that the saved session really is a signed-in one
+static int __SessionIsValid(const char *subject_path)
+{
+    char *jarvis_path = NULL;
+    if (GetDotJarvisPath(&jarvis_path) != EXIT_SUCCESS)
+        return 0;
+
+    char file_path[1024];
+    snprintf(file_path, sizeof(file_path), "%s/%s", jarvis_path,
+             AUTH_CHECK_FILE);
+    remove(file_path); // never read a page left by a previous run
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s/setup_get_subject\" run \"%s\" \"%s\" %s \"%s\" "
+             ">/dev/null 2>&1",
+             subject_path, URL, subject_path, AUTH_CHECK_FILE, jarvis_path);
+    free(jarvis_path);
+
+    UiInfo("Checking that you are signed in...");
+    fflush(stdout);
+
+    int status = system(cmd);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return 0;
+
+    FILE *page = fopen(file_path, "r");
+    if (page == NULL)
+        return 0;
+
+    char *content = malloc(AUTH_CHECK_MAX + 1);
+    if (content == NULL)
+    {
+        fclose(page);
+        return 0;
+    }
+    size_t length = fread(content, 1, AUTH_CHECK_MAX, page);
+    fclose(page);
+    remove(file_path);
+    content[length] = '\0';
+
+    for (size_t i = 0; i < length; i++)
+        content[i] = (char)tolower((unsigned char)content[i]);
+
+    int signed_in = strstr(content, "type=\"password\"") == NULL
+        && strstr(content, "type='password'") == NULL
+        && strstr(content, "type=password") == NULL
+        && strstr(content, "project") != NULL;
+
+    free(content);
+    return signed_in;
+}
 
 // Lines written by the script that Jarvis now says itself, with its own style
 static int __IsAuthNoise(const char *line)
@@ -405,6 +461,9 @@ static int __AuthBrowser(const char *subject_path, const char *auth_path)
            "to prepare it)...");
     fflush(stdout);
 
+    // A session left by a previous run must not count as a success
+    remove(auth_path);
+
     FILE *script = popen(cmd, "r");
     if (script == NULL)
         UiErrx(EXIT_FAILURE, "Impossible to start the authentication.");
@@ -436,6 +495,15 @@ static int __AuthBrowser(const char *subject_path, const char *auth_path)
     if (access(auth_path, F_OK) != 0)
     {
         UiError("Authentication failed : no session was saved. Try again with "
+                "'jarvis auth'.");
+        return EXIT_FAILURE;
+    }
+
+    if (!__SessionIsValid(subject_path))
+    {
+        remove(auth_path);
+        UiError("Authentication failed : you are not signed in to the forge "
+                "(window closed before signing in?). Try again with "
                 "'jarvis auth'.");
         return EXIT_FAILURE;
     }
@@ -515,14 +583,21 @@ static int __AuthConsole(const char *subject_path, const char *auth_path)
         }
 
         UiInfo("Signing in...");
+        remove(auth_path); // a previous session must not count as a success
         int code = __RunAuthConsole(subject_path, username, password);
         __Wipe(username, sizeof(username));
         __Wipe(password, sizeof(password));
 
         if (code == 0 && access(auth_path, F_OK) == 0)
         {
-            UiSuccess("Authentication saved.");
-            return EXIT_SUCCESS;
+            if (__SessionIsValid(subject_path))
+            {
+                UiSuccess("Authentication saved.");
+                return EXIT_SUCCESS;
+            }
+            // The script saved a session but it is not a signed-in one
+            remove(auth_path);
+            code = 2;
         }
 
         if (code == 2 && attempt < AUTH_MAX_ATTEMPTS)
@@ -565,6 +640,22 @@ int Auth()
 
     return console ? __AuthConsole(subject_path, auth_path)
                    : __AuthBrowser(subject_path, auth_path);
+}
+
+// The saved session does not work (expired, never signed in...) : forget it,
+// tell the user and ask to sign in again. EXIT_SUCCESS once signed in.
+int Reauth(void)
+{
+    char auth_path[512];
+    snprintf(auth_path, sizeof(auth_path), "%s/auth.json",
+             GetSubjectFolderPath());
+    remove(auth_path);
+
+    UiWarning("Your session on the forge is not valid (expired or not signed "
+              "in). Please sign in again.");
+    fflush(stderr);
+
+    return Auth();
 }
 
 #define a 1000

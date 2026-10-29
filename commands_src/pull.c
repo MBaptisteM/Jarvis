@@ -1,6 +1,5 @@
 #include "pull.h"
 
-#include "current_handling.h"
 
 int ReadRootPath(char **value);
 
@@ -309,6 +308,379 @@ void __PullRepository(char *repo_arg)
     free(main_folder_path);
 }
 
+
+static unsigned __PullJobs(void)
+{
+    const char *value = getenv("JARVIS_JOBS");
+    if (value == NULL || value[0] == '\0')
+        return PULL_DEFAULT_JOBS;
+
+    char *end = NULL;
+    long jobs = strtol(value, &end, 10);
+    if (*end != '\0' || jobs < 1)
+        return PULL_DEFAULT_JOBS;
+    return jobs > PULL_MAX_JOBS ? PULL_MAX_JOBS : (unsigned)jobs;
+}
+
+// Whole content of a log file (malloc'd), NULL if empty
+static char *__ReadLog(int fd)
+{
+    struct stat info;
+    if (fstat(fd, &info) != 0 || info.st_size <= 0)
+        return NULL;
+
+    size_t size = (size_t)info.st_size;
+    char *buffer = malloc(size + 1);
+    if (buffer == NULL)
+        return NULL;
+
+    size_t got = 0;
+    while (got < size)
+    {
+        ssize_t n = pread(fd, buffer + got, size - got, (off_t)got);
+        if (n <= 0)
+            break;
+        got += (size_t)n;
+    }
+    while (got > 0 && (buffer[got - 1] == '\n' || buffer[got - 1] == '\r'))
+        got--;
+    buffer[got] = '\0';
+    return buffer;
+}
+
+// Pull one submodule (and its own submodules). Its output is kept in a log
+// so that several pulls do not mix their lines in the terminal.
+static int __RunPull(const PullJob *job, char **log)
+{
+    char log_path[] = "/tmp/jarvis-pull-XXXXXX";
+    int log_fd = mkstemp(log_path);
+
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        // Only async-signal-safe calls between fork and exec (multithreaded
+        // process)
+        int null_fd = open("/dev/null", O_RDONLY);
+        if (null_fd >= 0)
+            dup2(null_fd, STDIN_FILENO);
+
+        int out_fd = log_fd >= 0 ? log_fd : open("/dev/null", O_WRONLY);
+        if (out_fd >= 0)
+        {
+            dup2(out_fd, STDOUT_FILENO);
+            dup2(out_fd, STDERR_FILENO);
+        }
+
+        if (chdir(job->repo_path) != 0)
+            _exit(126);
+        execlp("sh", "sh", "-c", PULL_SUBMODULE_SCRIPT, "sh", job->path,
+               (char *)NULL);
+        _exit(127);
+    }
+
+    int result = EXIT_FAILURE;
+    if (pid > 0)
+    {
+        int status;
+        if (waitpid(pid, &status, 0) >= 0 && WIFEXITED(status)
+            && WEXITSTATUS(status) == 0)
+            result = EXIT_SUCCESS;
+    }
+
+    if (log_fd >= 0)
+    {
+        *log = __ReadLog(log_fd);
+        close(log_fd);
+        unlink(log_path);
+    }
+    return result;
+}
+
+// Live progress line (bottom of the terminal, redrawn in place). Both
+// functions must be called with pull_lock held.
+static void __ProgressClear(void)
+{
+    if (pull_tty)
+    {
+        fputs("\r\033[K", stderr);
+        fflush(stderr);
+    }
+}
+
+static void __ProgressDraw(void)
+{
+    if (!pull_tty || pull_total == 0)
+        return;
+
+    enum { BAR = 20 };
+    size_t filled = pull_done * BAR / pull_total;
+    char bar[BAR * 3 + 1];
+    size_t used = 0;
+    for (size_t i = 0; i < BAR; i++)
+    {
+        const char *cell = i < filled ? "█" : "░";
+        memcpy(bar + used, cell, 3);
+        used += 3;
+    }
+    bar[used] = '\0';
+
+    fprintf(stderr, "\r\033[K[%zu/%zu] %s %3zu%%  %zu running", pull_done,
+            pull_total, bar, pull_done * 100 / pull_total, pull_running);
+    if (pull_problems > 0)
+        fprintf(stderr, "  %zu issue(s)", pull_problems);
+    if (pull_last[0] != '\0' && pull_done < pull_total)
+        fprintf(stderr, "  last: %.40s", pull_last);
+    fflush(stderr);
+}
+
+// Show the Jarvis messages of one submodule with the Ui panels. Only the lines
+// written by the script (tagged "X:") are kept, anything else is ignored.
+// Returns 1 if there was a warning or an error.
+static int __ShowMessages(const PullJob *job, const char *log, int failed)
+{
+    size_t size = (log != NULL ? strlen(log) : 0) + strlen(job->path) + 32;
+    char *messages = calloc(size, 1);
+    if (messages == NULL)
+        return failed;
+
+    int has_error = failed;
+    int has_warning = 0;
+    int has_success = 0;
+    int count = 0;
+    size_t used = 0;
+
+    for (const char *line = log; line != NULL && *line != '\0';)
+    {
+        size_t length = strcspn(line, "\n");
+        if (length > 2 && line[1] == ':' && strchr("IWSE", line[0]) != NULL)
+        {
+            if (line[0] == 'E')
+                has_error = 1;
+            else if (line[0] == 'W')
+                has_warning = 1;
+            else if (line[0] == 'S')
+            {
+                has_success = 1;
+                has_warning = 0; // The resync fixed the stale commit
+            }
+
+            if (count++ > 0)
+                messages[used++] = '\n';
+            memcpy(messages + used, line + 2, length - 2);
+            used += length - 2;
+        }
+        line += length + (line[length] == '\n' ? 1 : 0);
+    }
+    messages[used] = '\0';
+
+    if (failed && count == 0)
+        snprintf(messages, size, "%s: pull failed.", job->path);
+
+    UiKind kind = has_error ? UI_ERROR
+        : has_warning       ? UI_WARNING
+        : has_success       ? UI_SUCCESS
+                            : UI_INFO;
+    int problem = has_error || has_warning;
+
+    if (messages[0] != '\0')
+    {
+        pthread_mutex_lock(&pull_lock);
+        __ProgressClear(); // the panel is printed above the progress line
+        UiPanel(kind == UI_ERROR || kind == UI_WARNING ? stderr : stdout, kind,
+                NULL, "[%zu/%zu] %s", pull_done, pull_total, messages);
+        pthread_mutex_unlock(&pull_lock);
+    }
+
+    free(messages);
+    return problem;
+}
+
+static void *__PullWorker(void *argument)
+{
+    PullJob *job = argument;
+
+    // One thread per submodule, but only a few pull at the same time
+    while (sem_wait(&pull_slots) != 0 && errno == EINTR)
+        ;
+    pthread_mutex_lock(&pull_lock);
+    pull_running++;
+    __ProgressDraw();
+    pthread_mutex_unlock(&pull_lock);
+
+    char *log = NULL;
+    int result = __RunPull(job, &log);
+    sem_post(&pull_slots);
+
+    pthread_mutex_lock(&pull_lock);
+    pull_running--;
+    pull_done++;
+    pull_last = job->path;
+    if (pull_tty)
+        __ProgressDraw();
+    else
+        printf("[%zu/%zu] %s\n", pull_done, pull_total, job->path);
+    pthread_mutex_unlock(&pull_lock);
+
+    int problem = __ShowMessages(job, log, result != EXIT_SUCCESS);
+    pthread_mutex_lock(&pull_lock);
+    if (problem)
+        pull_problems++;
+    __ProgressDraw();
+    pthread_mutex_unlock(&pull_lock);
+
+    free(log);
+    return NULL;
+}
+
+static void __PullSubmodules(const char *repo_path)
+{
+    // Top-level submodules only (the nested ones are pulled by their parent)
+    size_t command_size = strlen(repo_path) + 128;
+    char *command = malloc(command_size);
+    if (command == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(command, command_size,
+             "git -C \"%s\" submodule foreach --quiet 'echo \"$sm_path\"'",
+             repo_path);
+
+    FILE *pipe = popen(command, "r");
+    free(command);
+    if (pipe == NULL)
+    {
+        UiWarning("Impossible to list the submodules of %s.", repo_path);
+        return;
+    }
+
+    char **paths = NULL;
+    size_t count = 0;
+    size_t capacity = 0;
+    char line[4096];
+    while (fgets(line, sizeof(line), pipe) != NULL)
+    {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (line[0] == '\0')
+            continue;
+
+        if (count == capacity)
+        {
+            capacity = capacity == 0 ? 32 : capacity * 2;
+            char **bigger = realloc(paths, capacity * sizeof(char *));
+            if (bigger == NULL)
+                err(EXIT_FAILURE, "realloc");
+            paths = bigger;
+        }
+        paths[count] = strdup(line);
+        if (paths[count] == NULL)
+            err(EXIT_FAILURE, "strdup");
+        count++;
+    }
+    pclose(pipe);
+
+    if (count == 0)
+    {
+        free(paths);
+        return;
+    }
+
+    unsigned jobs_limit = __PullJobs();
+    if (sem_init(&pull_slots, 0, jobs_limit) != 0)
+        err(EXIT_FAILURE, "sem_init");
+
+    pull_total = count;
+    pull_done = 0;
+    pull_problems = 0;
+    pull_running = 0;
+    pull_last = "";
+    pull_tty = isatty(STDERR_FILENO) && getenv("TERM") != NULL
+        && strcmp(getenv("TERM"), "dumb") != 0;
+    UiInfo("Pulling %zu submodules (%u at the same time)...", count,
+           jobs_limit);
+    pthread_mutex_lock(&pull_lock);
+    __ProgressDraw();
+    pthread_mutex_unlock(&pull_lock);
+
+    PullJob *jobs = calloc(count, sizeof(PullJob));
+    pthread_t *threads = calloc(count, sizeof(pthread_t));
+    int *started = calloc(count, sizeof(int));
+    if (jobs == NULL || threads == NULL || started == NULL)
+        err(EXIT_FAILURE, "calloc");
+
+    // One thread per submodule
+    for (size_t i = 0; i < count; i++)
+    {
+        jobs[i].repo_path = repo_path;
+        jobs[i].path = paths[i];
+        if (pthread_create(&threads[i], NULL, __PullWorker, &jobs[i]) == 0)
+            started[i] = 1;
+        else
+            __PullWorker(&jobs[i]); // No thread available : do it here
+    }
+
+    for (size_t i = 0; i < count; i++)
+        if (started[i])
+            pthread_join(threads[i], NULL);
+
+    sem_destroy(&pull_slots);
+
+    pthread_mutex_lock(&pull_lock);
+    __ProgressClear();
+    pthread_mutex_unlock(&pull_lock);
+
+    if (pull_problems > 0)
+        UiWarning("%zu of %zu submodules of %s could not be fully synced "
+                  "automatically, check the messages above.",
+                  pull_problems, count, repo_path);
+    else
+        UiSuccess("All the %zu submodules of %s are up to date.", count,
+                  repo_path);
+
+    for (size_t i = 0; i < count; i++)
+        free(paths[i]);
+    free(paths);
+    free(jobs);
+    free(threads);
+    free(started);
+}
+
+// Run a shell command without showing what it writes (git is chatty : ssh
+// banners, progress...). The output is only given back to be shown if the
+// command failed. Returns 0 on success.
+static int __RunQuiet(const char *command, char **output)
+{
+    *output = NULL;
+
+    size_t full_size = strlen(command) + sizeof(" 2>&1");
+    char *full = malloc(full_size);
+    if (full == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(full, full_size, "%s 2>&1", command);
+
+    FILE *pipe = popen(full, "r");
+    free(full);
+    if (pipe == NULL)
+        return -1;
+
+    char *buffer = NULL;
+    size_t size = 0;
+    char chunk[1024];
+    size_t got;
+    while ((got = fread(chunk, 1, sizeof(chunk), pipe)) > 0)
+    {
+        char *bigger = realloc(buffer, size + got + 1);
+        if (bigger == NULL)
+            break;
+        buffer = bigger;
+        memcpy(buffer + size, chunk, got);
+        size += got;
+    }
+    if (buffer != NULL)
+        buffer[size] = '\0';
+
+    int status = pclose(pipe);
+    *output = buffer;
+    return status == 0 ? 0 : -1;
+}
+
 void __PullRepo(char *repo_path)
 {
     UiPanel(stdout, UI_INFO, "Pull", "Pulling:\n%s", repo_path);
@@ -318,9 +690,15 @@ void __PullRepo(char *repo_path)
     char command[command_size];
     snprintf(command, command_size, "git -C \"%s\" pull", repo_path);
 
-    if (system(command))
-        errx(EXIT_FAILURE, "ERROR Impossible to pull the repository %s",
-             repo_path);
+    char *output;
+    if (__RunQuiet(command, &output) != 0)
+    {
+        UiError("Impossible to pull the repository %s:\n%s", repo_path,
+                output != NULL ? output : "");
+        free(output);
+        exit(EXIT_FAILURE);
+    }
+    free(output);
 
     // Repair gitlinks that have no url in .gitmodules
     __HealSubmodules(repo_path);
@@ -329,43 +707,13 @@ void __PullRepo(char *repo_path)
     size_t init_command_size = strlen(repo_path) + SIZE_OF_STRING;
     char init_command[init_command_size];
     snprintf(init_command, init_command_size,
-             "git -C \"%s\" submodule update --init --recursive", repo_path);
-    if (system(init_command) == -1)
-        errx(EXIT_FAILURE, "ERROR impossible to update the submodules");
+             "git -C \"%s\" submodule update --init --recursive --jobs %u",
+             repo_path, __PullJobs());
+    if (__RunQuiet(init_command, &output) != 0)
+        UiWarning("Some submodules of %s could not be initialized:\n%s",
+                  repo_path, output != NULL ? output : "");
+    free(output);
 
-    // Pull every submodule recursively
-    size_t submodule_command_size = strlen(repo_path) + 2048;
-    char submodule_command[submodule_command_size];
-    snprintf(
-        submodule_command, submodule_command_size,
-        "git -C \"%s\" submodule foreach --recursive '"
-        "if ! git pull; then "
-        "default_branch=$(git remote show origin 2>/dev/null | sed -n "
-        "\"/HEAD branch/s/.*: //p\"); "
-        "if [ -z \"$default_branch\" ] || [ \"$default_branch\" = "
-        "\"(unknown)\" ]; then "
-        "echo \"$name: nothing to pull (empty or unreachable remote), "
-        "skipped.\"; "
-        "elif [ -n \"$(git status --porcelain)\" ]; then "
-        "echo \"WARNING: $name could not be pulled and has local changes, "
-        "not resyncing it, please fix it manually.\"; "
-        "else "
-        "echo \"WARNING: submodule $name has a stale or unreachable commit, "
-        "resyncing with its remote...\"; "
-        "git fetch origin; "
-        "(git checkout \"$default_branch\" 2>/dev/null || git checkout -b "
-        "\"$default_branch\" \"origin/$default_branch\"); "
-        "git reset --hard \"origin/$default_branch\" "
-        "&& echo \"Resynced $name to origin/$default_branch\" "
-        "|| echo \"ERROR: could not resync $name, please fix it manually.\"; "
-        "fi; "
-        "fi'",
-        repo_path);
-
-    if (system(submodule_command))
-        UiWarning("Some submodules of %s could not be fully synced "
-                  "automatically, check the output above.",
-                  repo_path);
-
-    printf("\n");
+    // Pull every submodule in parallel (one thread per submodule)
+    __PullSubmodules(repo_path);
 }

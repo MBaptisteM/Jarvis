@@ -1,17 +1,20 @@
 #include "clone_root.h"
 
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
+char *FindRootRepoNear(const char *name, int max_depth);
 
-#include "TPs_handler.h"
-#include "get_documents.h"
-#include "info_file.h"
+// Number of submodules cloned at the same time : JARVIS_JOBS, 8 by default
+static unsigned __CloneJobs(void)
+{
+    const char *value = getenv("JARVIS_JOBS");
+    if (value == NULL || value[0] == '\0')
+        return 8;
 
-#define SIZE_OF_STRING 512
+    char *end = NULL;
+    long jobs = strtol(value, &end, 10);
+    if (*end != '\0' || jobs < 1)
+        return 8;
+    return jobs > 64 ? 64 : (unsigned)jobs;
+}
 
 static int __IsGitRepositoryPath(const char *path)
 {
@@ -133,7 +136,7 @@ void __CloneParentRepo(void)
     // just unknown to Jarvis (e.g. after a failed previous run, or a
     // manual clone) -> look for it in the arborescence before trying to
     // clone it again from scratch
-    char *found_path = FindFileBFS(REPO_NAME);
+    char *found_path = FindRootRepoNear(REPO_NAME, ROOT_SEARCH_DEPTH);
     if (found_path != NULL)
     {
         char *repo_path = __JoinRepoPath(found_path, REPO_NAME);
@@ -188,8 +191,8 @@ void __CloneParentRepo(void)
     char command[command_size];
     snprintf(command, command_size,
              "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone "
-             "--recursive \"%s\" %s",
-             url, REPO_NAME);
+             "--recursive --jobs %u \"%s\" %s",
+             __CloneJobs(), url, REPO_NAME);
 
     if (system(command))
         errx(EXIT_FAILURE, "ERROR Impossible to clone the root repository %s",

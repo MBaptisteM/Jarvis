@@ -103,37 +103,49 @@ char *GetCurrentRepo()
     if (pages_url == NULL)
         err(EXIT_FAILURE, "calloc");
 
-    for (int i = 0; i < ind_urls; i++)
+    // No project on the home page means the saved session is not a signed-in
+    // one (expired, window closed before signing in...) : ask the user to sign
+    // in again, then retry (up to 2 re-authentications).
+    for (int attempt = 0;; attempt++)
     {
-        ThreadArg *arg = malloc(sizeof(ThreadArg));
-        if (arg == NULL)
-            err(EXIT_FAILURE, "malloc failed");
-
-        arg->url = projects_url[i];
-        arg->repos_url = &pages_url;
-        arg->ind_repos = &ind_pages;
-        arg->lock = &lock;
-        arg->id = i;
-
-        if (pthread_create(&(threads[i]), NULL, ThreadExtractPages, arg) != 0)
+        for (int i = 0; i < ind_urls; i++)
         {
-            free(arg);
-            errx(EXIT_FAILURE, "ERROR while creating the thread %d", i);
+            ThreadArg *arg = malloc(sizeof(ThreadArg));
+            if (arg == NULL)
+                err(EXIT_FAILURE, "malloc failed");
+
+            arg->url = projects_url[i];
+            arg->repos_url = &pages_url;
+            arg->ind_repos = &ind_pages;
+            arg->lock = &lock;
+            arg->id = i;
+
+            if (pthread_create(&(threads[i]), NULL, ThreadExtractPages, arg)
+                != 0)
+            {
+                free(arg);
+                errx(EXIT_FAILURE, "ERROR while creating the thread %d", i);
+            }
         }
-    }
 
-    for (int i = 0; i < ind_urls; i++)
-    {
-        if (pthread_join(threads[i], NULL) != 0)
+        for (int i = 0; i < ind_urls; i++)
         {
+            if (pthread_join(threads[i], NULL) != 0)
+            {
+                errx(EXIT_FAILURE,
+                     "ERROR Impossible to find the current repository (try to "
+                     "retry)");
+            }
+        }
+
+        if (ind_pages > 0)
+            break;
+
+        if (attempt >= 2 || Reauth() != EXIT_SUCCESS)
             errx(EXIT_FAILURE,
-                 "ERROR Impossible to find the current repository (try to "
-                 "retry)");
-        }
+                 "ERROR No project page found on the home page : you are not "
+                 "signed in to the forge. Run 'jarvis auth' and sign in.");
     }
-
-    if (ind_pages == 0)
-        errx(EXIT_FAILURE, "ERROR No project page found on the home page");
 
     int ind_repos = 0;
     char **repos_url = calloc(512, sizeof(char *));
