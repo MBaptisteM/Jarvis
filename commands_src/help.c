@@ -289,6 +289,27 @@ static const Command COMMANDS[] = {
       .rows = { { NULL, NULL } },
       .examples = { "jarvis uninstall", NULL } },
 
+    { .name = "counter",
+      .shortcut = NULL,
+      .group = "Others",
+      .usage = "jarvis help counter",
+      .summary = "How the Jarvis user counter works.",
+      .details =
+          "Jarvis counts its users with the stars of its GitHub repository "
+          "(MBaptisteM/Jarvis). The first time you use Jarvis in a terminal "
+          "while connected to GitHub (gh), it asks whether you accept to be "
+          "counted. If you say yes, a star is added to the repository with "
+          "your GitHub account. The question is asked only once, your answer "
+          "is saved and Jarvis works the same whatever you answer. The "
+          "counter is not anonymous : the list of the people who starred a "
+          "repository is public on GitHub. This way was choosen because it "
+          " is the simpliest to show publicly how many people use Jarvis "
+          "without external server. To leave the count, remove the star "
+          "on the GitHub page of the repository.",
+      .rows_title = "Arguments",
+      .rows = { { NULL, NULL } },
+      .examples = { "jarvis help counter", NULL } },
+
     { .name = "help",
       .shortcut = "h",
       .group = "Others",
@@ -358,9 +379,8 @@ static const Command *__Find(const char *name)
     return NULL;
 }
 
-// ---------------------------------------------------------------------------
+
 // Panels : ╭─ Title ────╮ / │ name   text │ / ╰────╯
-// ---------------------------------------------------------------------------
 
 static void __PanelTop(const char *title, int width, const char *title_color)
 {
@@ -457,9 +477,7 @@ static void __PrintUsage(const char *usage)
             K_RESET);
 }
 
-// ---------------------------------------------------------------------------
 // Help pages
-// ---------------------------------------------------------------------------
 
 static void __PrintGeneralHelp(void)
 {

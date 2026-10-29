@@ -1,5 +1,7 @@
 #include "push.h"
 
+#include "counter.h"
+
 int ReadRootPath(char **value);
 int PushRepoStatus(char *repo_path, char *commit_name, char *tag);
 int PushRepoRootStatus(char *commit_name, int staging_failed);
@@ -146,6 +148,9 @@ static void __SetPath(char **path, char *value, char *current_folder)
 
 int main(int argc, char *argv[])
 {
+    // Ask once if the user accepts to be counted (GitHub star)
+    CounterAsk();
+
     char *path = NULL;
 
     char *name_commit = NULL;

@@ -23,3 +23,11 @@
 #include "get_documents.h"
 #include "get_jarvis_paths.h"
 #include "ui.h"
+#include "counter.h"
+
+#define FILL_BUFFER 1024
+#define FILL_NAME_MAX 128
+#define FILL_SEARCH_DEPTH 6
+#define FILL_BAR_WIDTH 30
+#define FILL_DEFAULT_JOBS 8
+#define FILL_MAX_JOBS 64

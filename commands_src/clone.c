@@ -60,6 +60,9 @@ int main(int argc, char *argv[])
     atexit(CleanupOnExit);
     char *current_repo_url = NULL;
 
+    // Ask once if the user accepts to be counted (GitHub star)
+    CounterAsk();
+
     // Case no argument, or "all": clone the root EPITA-TPs repository itself
     // (bootstrap), instead of a specific TP repository.
     if (argc < 2 || strcasecmp(argv[1], "all") == 0)

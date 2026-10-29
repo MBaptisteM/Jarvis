@@ -1,12 +1,5 @@
 #include "fill.h"
 
-#define FILL_BUFFER 1024
-#define FILL_NAME_MAX 128
-#define FILL_SEARCH_DEPTH 6
-#define FILL_BAR_WIDTH 30
-#define FILL_DEFAULT_JOBS 8
-#define FILL_MAX_JOBS 64
-
 // jarvis fill [old | all | current | <project>]
 
 typedef enum
@@ -1122,6 +1115,9 @@ int main(int argc, char *argv[])
         errx(EXIT_FAILURE,
              "ERROR Too many arguments. Usage : jarvis fill [old | all | "
              "current | <project>]");
+
+    // Ask once if the user accepts to be counted (GitHub star)
+    CounterAsk();
 
     Scope scope = SCOPE_OLD;
     char project[FILL_NAME_MAX] = "";

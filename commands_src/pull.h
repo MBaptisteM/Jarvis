@@ -15,6 +15,8 @@
 #include "info_file.h"
 #include "ui.h"
 #include "current_handling.h"
+#include "counter.h"
+
 
 // Parallel pull of the submodules : one thread per top-level submodule
 #define PULL_DEFAULT_JOBS 8
@@ -68,6 +70,7 @@ static int pull_tty = 0;            // live progress line only on a terminal
 static const char *pull_last = "";  // last submodule finished
 
 int main(int argc, char *argv[]);
+int ReadRootPath(char **value);
 void __PullRepo(char *repo_path);
 void __PullMain(void);
 void __PullCurrent(void);

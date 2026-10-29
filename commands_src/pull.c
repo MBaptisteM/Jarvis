@@ -1,10 +1,11 @@
 #include "pull.h"
 
 
-int ReadRootPath(char **value);
-
 int main(int argc, char *argv[])
 {
+    // Ask once if the user accepts to be counted (GitHub star)
+    CounterAsk();
+
     // Case main (or no argument): pull the root folder and every submodule
     if (argc < 2 || strcasecmp(argv[1], "all") == 0)
     {
