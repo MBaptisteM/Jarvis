@@ -57,8 +57,31 @@ static int __ReadByte(unsigned char *c, int timeout_ms)
     }
 }
 
+// An empty option ("") is a blank separator : it is displayed as an empty line
+// and can never be selected
+static int __Selectable(const char *options[], int index)
+{
+    return options[index][0] != '\0';
+}
+
+// Next selectable option from "from" in the direction step (+1 / -1), looping.
+// Stays on "from" when there is no other selectable option.
+static int __NextSelectable(const char *options[], int num_choices, int from,
+                            int step)
+{
+    int index = from;
+    for (int k = 0; k < num_choices; k++)
+    {
+        index = (index + step + num_choices) % num_choices;
+        if (__Selectable(options, index))
+            return index;
+    }
+    return from;
+}
+
 // Let the user choose and option and return the index of the option
-// (-1 if the input is closed)
+// (-1 if the input is closed). Empty options ("") are blank separators that
+// cannot be selected, the index returned still counts them.
 int ChoiceMCQ(const char *options[], int num_choices)
 {
     struct termios orig;
@@ -66,12 +89,16 @@ int ChoiceMCQ(const char *options[], int num_choices)
 
     int choice = 0;
     int closed = 0;
+    if (num_choices > 0 && !__Selectable(options, 0))
+        choice = __NextSelectable(options, num_choices, 0, 1);
 
     while (1)
     {
         for (int i = 0; i < num_choices; i++)
         {
-            if (i == choice)
+            if (!__Selectable(options, i))
+                printf("\n");
+            else if (i == choice)
                 printf("> \033[7m%s\033[0m\n", options[i]);
             else
                 printf("  %s\n", options[i]);
@@ -95,9 +122,9 @@ int ChoiceMCQ(const char *options[], int num_choices)
                 && __ReadByte(&dir, CHOICE_ESC_MS) == 1)
             {
                 if (dir == 'A')
-                    choice = (choice - 1 + num_choices) % num_choices;
+                    choice = __NextSelectable(options, num_choices, choice, -1);
                 if (dir == 'B')
-                    choice = (choice + 1) % num_choices;
+                    choice = __NextSelectable(options, num_choices, choice, 1);
             }
         }
         else if (c == '\n' || c == '\r')

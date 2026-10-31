@@ -600,6 +600,54 @@ static int __FormatMenu(void)
     return changed;
 }
 
+// Returns 1 when a setting changed
+static int __TidyMenu(void)
+{
+    static const char *values[3] = { "off", "warn", "fix" };
+    static const char *names[3] = { "nothing", "warn", "fix" };
+    static const char *texts[3] = {
+        "Nothing : the code is not checked when pushing",
+        "Warn : the code is checked, choose to push anyway or to cancel",
+        "Fix : the code is checked, names, comments and newlines are fixed"
+    };
+    int changed = 0;
+
+    UiQuestion("What should jarvis do about the style problems (jarvis tidy) "
+               "before each push ?\n"
+               "(fix never touches the functions with too many lines or "
+               "arguments, they are only reported)");
+    while (1)
+    {
+        int mode = GetTidyMode();
+        char labels[3][128];
+        const char *options[4];
+
+        for (int i = 0; i < 3; i++)
+        {
+            snprintf(labels[i], sizeof(labels[i]), "[%c] %s",
+                     mode == i ? 'x' : ' ', texts[i]);
+            options[i] = labels[i];
+        }
+        options[3] = "Back";
+
+        int choice = ChoiceMCQ(options, 4);
+        if (choice < 0 || choice >= 3)
+            break;
+
+        if (choice == mode)
+        {
+            UiInfo("Nothing changed.");
+            continue;
+        }
+
+        __Save("auto_tidy", values[choice]);
+        UiSuccess("Tidy before each jarvis push : %s.", names[choice]);
+        changed = 1;
+    }
+
+    return changed;
+}
+
 static int __Reset(void)
 {
     UiQuestion("Reset the organization to the default one ?");
@@ -1316,14 +1364,17 @@ int main(int argc, char *argv[])
             "Layers : enable or disable Year / Semester / Bimester folders",
             "Prefixes : choose the text before the number (ex : S<n>)",
             "Others : rename the folder used when the course is unknown",
+            "",
             "Format : automatic jarvis format before push, extensions",
+            "Tidy : what jarvis does about style problems before push",
+            "",
             "Reset : go back to the default organization",
             "Save : apply to the tree and push",
             "Quit : apply to the tree (no push)"
         };
 
         int updated = 0;
-        switch (ChoiceMCQ(options, 7))
+        switch (ChoiceMCQ(options, 10))
         {
         case 0:
             updated = __LayersMenu();
@@ -1334,15 +1385,20 @@ int main(int argc, char *argv[])
         case 2:
             updated = __AskOthers();
             break;
-        case 3:
+        case 4:
             // Saved at once in .jarvis_config, no change in the tree
             if (__FormatMenu())
                 format_changed = 1;
             break;
-        case 4:
+        case 5:
+            // Saved at once in .jarvis_config, no change in the tree
+            if (__TidyMenu())
+                format_changed = 1;
+            break;
+        case 7:
             updated = __Reset();
             break;
-        case 5:
+        case 8:
             // Save : apply the organization, then push the root repository
             if (__Finish(1) == EXIT_SUCCESS)
                 changed = format_changed = 0;
@@ -1366,12 +1422,13 @@ int main(int argc, char *argv[])
         UiWarning("Not pushed : choose \"Save\" next time, or run 'jarvis "
                   "push root'.");
         if (format_changed)
-            UiWarning("The format settings are in the same file.");
+            UiWarning("The format and tidy settings are in the same file.");
         return result;
     }
 
     if (format_changed)
-        UiWarning("Format settings not pushed : choose \"Save\" next time, or "
+        UiWarning("Format / tidy settings not pushed : choose \"Save\" next "
+                  "time, or "
                   "run 'jarvis push root'.");
 
     return EXIT_SUCCESS;

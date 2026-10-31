@@ -1,6 +1,8 @@
 #include "push.h"
 
+#include "choice.h"
 #include "counter.h"
+#include "tidy_handler.h"
 
 int ReadRootPath(char **value);
 int PushRepoStatus(char *repo_path, char *commit_name, char *tag);
@@ -144,6 +146,17 @@ static void __SetPath(char **path, char *value, char *current_folder)
     }
     else
         *path = value;
+}
+
+// jarvis tidy found problems before a push : 1 to push anyway, 0 to cancel
+// (the safe choice comes first, and is also used when the input is closed)
+static int __PushDespiteTidy(void)
+{
+    UiQuestion("jarvis tidy found problems (listed above). What do you want to "
+               "do ?");
+
+    const char *options[] = { "Cancel the push", "Push anyway" };
+    return ChoiceMCQ(options, 2) == 1;
 }
 
 int main(int argc, char *argv[])
@@ -338,6 +351,26 @@ int main(int argc, char *argv[])
     {
         UiInfo("Automatic format before the push...");
         FormatTree(path);
+    }
+
+    // 0bis. Automatic "jarvis tidy" (off by default, see 'jarvis custom'),
+    // after the format since formatting can change the size of the functions.
+    // When problems are found, the user chooses to push anyway or to cancel.
+    if (IsAutoTidyEnabled())
+    {
+        UiInfo("Automatic tidy before the push...");
+        if (TidyTree(path) > 0 && !__PushDespiteTidy())
+        {
+            UiWarning("Push cancelled because of the tidy problems.");
+
+            if (path_allocated)
+                free(path);
+            if (tag != NULL)
+                free(tag);
+            if (name_commit_allocated)
+                free(name_commit);
+            return EXIT_FAILURE;
+        }
     }
 
     // 1. The repository itself. One after the other (not at the same time) :

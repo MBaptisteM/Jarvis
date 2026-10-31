@@ -127,7 +127,12 @@ static const Command COMMANDS[] = {
           "one is given (or it is the name of the tag, if any). If the "
           "automatic format is enabled in 'jarvis custom' (off by default), "
           "the repository is formatted with jarvis format first ; the root "
-          "repository alone is never formatted. A problem never stops the "
+          "repository alone is never formatted. The tidy mode set in 'jarvis "
+          "custom' decides what is done with jarvis tidy before the push : "
+          "nothing (default), warn (on a problem, you choose to push anyway or "
+          "to cancel the push) or fix (the problems that can be fixed are "
+          "fixed in the files, the others are reported like with warn). A "
+          "problem never stops the "
           "other steps : the root repository is pushed even if the "
           "repository push failed, \"pushed\" is displayed only when commits "
           "were really sent, and the exit code is not zero if something "
@@ -204,7 +209,7 @@ static const Command COMMANDS[] = {
       .usage = "jarvis custom",
       .summary =
           "Customize the tree structure and the format (layers, prefixes, "
-          "Others, Format).",
+          "Others, Format, Tidy).",
       .details =
           "Interactive menu, chosen with the arrows and enter (prefixes, names "
           "and extensions are typed). The settings are stored in the "
@@ -212,7 +217,7 @@ static const Command COMMANDS[] = {
           "default values if missing), so once pushed and pulled every Jarvis "
           "of a project shares them. Quitting applies the changes to the "
           "repositories already cloned (they are moved); Save also pushes the "
-          "root repository. The Format settings are saved at once, Save "
+          "root repository. The Format and Tidy settings are saved at once, Save "
           "pushes them.",
       .rows_title = "Menu",
       .rows = { { "Layers",
@@ -231,6 +236,12 @@ static const Command COMMANDS[] = {
                   "and the leading dot don't matter : \"C++, "
                   "Json\" gives .c++ and .json), show or restore "
                   "the default list." },
+                { "Tidy",
+                  "What jarvis does with jarvis tidy before each push : "
+                  "nothing (default), warn (if problems are found, you "
+                  "choose to push anyway or to cancel) or fix (names, "
+                  "comments and newlines are fixed in the files, the other "
+                  "problems are reported)." },
                 { "Reset", "Go back to the default organization." },
                 { "Save",
                   "Apply the changes to the tree and push the root "
@@ -261,6 +272,46 @@ static const Command COMMANDS[] = {
                 { NULL, NULL } },
       .examples = { "jarvis format", "jarvis format ../EPITA-TPs", "j fm",
                     NULL } },
+
+    { .name = "tidy",
+      .shortcut = "t",
+      .group = "Organization",
+      .usage = "jarvis tidy [-f | --fix] [<path> | -p <path>]",
+      .summary = "Check the style rules of the code of the current folder.",
+      .details =
+          "Scans every C / C++ file (.c .h .cc .cpp .cxx .hh .hpp .hxx) of the "
+          "current folder (or of the given folder) and all its sub-folders, "
+          "and lists every problem as <file>:<line>: <problem> in an Info panel. "
+          "Nothing is "
+          "modified without your answer : when problems that can be fixed are "
+          "found (include guard names, #endif comments, final newline), Jarvis "
+          "asks whether to fix them, and warns you about the others, that "
+          "stay to fix by hand. With --fix they are fixed without asking "
+          "(nothing is asked outside a terminal). A function with "
+          "too many lines or arguments is never modified. The exit code is "
+          "not zero when a problem is left. .git "
+          "and node_modules folders are skipped. Lines of a function : blank "
+          "lines, comments and lines made of braces only are not counted. "
+          "What is done automatically before each jarvis push (nothing, warn "
+          "or fix ; nothing by default) is set in 'jarvis custom' > Tidy.",
+      .rows_title = "Checks",
+      .rows = { { "Arguments", "At most 4 arguments per function." },
+                { "Length", "At most 30 lines per function." },
+                { "Newline", "Every file ends with a newline." },
+                { "#endif",
+                  "Followed by a comment with exactly the name of its #if "
+                  "(ex : #endif /* DEBUG */)." },
+                { "Header guard",
+                  "A header starts with #ifndef <FILE NAME>_H in upper case "
+                  "(test.h : TEST_H), followed by #define with the same "
+                  "name." },
+                { "<path>", "Folder to check (default: the current folder)." },
+                { "-f, --fix",
+                  "Fix what can be fixed without asking, report the rest." },
+                { "-p, --path <path>", "Same as <path>." },
+                { NULL, NULL } },
+      .examples = { "jarvis tidy", "jarvis tidy --fix",
+                    "jarvis tidy ../EPITA-TPs", "j t", NULL } },
 
     { .name = "erase",
       .shortcut = NULL,

@@ -12,5 +12,7 @@
 // The first time a user is connected to GitHub (gh) uses Jarvis in a
 // terminal, he is asked whether he agrees to be counted.
 
+void CounterAsk(void);
+
 #define COUNTER_REPO "MBaptisteM/Jarvis"
 #define COUNTER_KEY "counter_asked"

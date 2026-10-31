@@ -213,10 +213,26 @@ typedef struct
     char prefix[3][CONFIG_PREFIX_MAX + 1];
     char others[CONFIG_OTHERS_MAX + 1];
     int auto_format;
+    int auto_tidy; // TIDY_MODE_*
     char format_extensions[CONFIG_FORMAT_MAX + 1];
 } JarvisConfig;
 
 static const char *CONFIG_LAYERS[3] = { "year", "semester", "bimester" };
+
+// Values of "auto_tidy", indexed by TIDY_MODE_*
+static const char *CONFIG_TIDY_MODES[3] = { "off", "warn", "fix" };
+
+// TIDY_MODE_* of a value, -1 if it is not valid ("on" is the old name of
+// "warn")
+static int __ConfigTidyMode(const char *value)
+{
+    if (strcmp(value, "on") == 0)
+        return TIDY_MODE_WARN;
+    for (int i = 0; i < 3; i++)
+        if (strcmp(value, CONFIG_TIDY_MODES[i]) == 0)
+            return i;
+    return -1;
+}
 
 static JarvisConfig jarvis_config;
 static int jarvis_config_loaded = 0;
@@ -343,6 +359,7 @@ static void __ConfigDefaults(JarvisConfig *config)
     }
     snprintf(config->others, sizeof(config->others), "%s", DEFAULT_OTHERS_NAME);
     config->auto_format = 0;
+    config->auto_tidy = 0;
     snprintf(config->format_extensions, sizeof(config->format_extensions), "%s",
              DEFAULT_FORMAT_EXTENSIONS);
 }
@@ -419,6 +436,9 @@ static int __ConfigWrite(const char *path, const JarvisConfig *config)
     failed |=
         fprintf(file, "auto_format = %s\n", config->auto_format ? "on" : "off")
         < 0;
+    failed |= fprintf(file, "auto_tidy = %s\n",
+                      CONFIG_TIDY_MODES[config->auto_tidy])
+        < 0;
     failed |=
         fprintf(file, "format_extensions = %s\n", config->format_extensions)
         < 0;
@@ -476,6 +496,14 @@ static int __ConfigApply(JarvisConfig *config, const char *key,
         if (strcmp(value, "on") != 0 && strcmp(value, "off") != 0)
             return EXIT_FAILURE;
         config->auto_format = strcmp(value, "on") == 0;
+        return EXIT_SUCCESS;
+    }
+    if (strcmp(key, "auto_tidy") == 0)
+    {
+        int mode = __ConfigTidyMode(value);
+        if (mode < 0)
+            return EXIT_FAILURE;
+        config->auto_tidy = mode;
         return EXIT_SUCCESS;
     }
     if (strcmp(key, "format_extensions") == 0)
@@ -547,8 +575,8 @@ void EnsureConfigFile(void)
 }
 
 // Change one setting ("layer_<layer>" = on/off, "prefix_<layer>" = text,
-// "others_name" = folder name, "auto_format" = on/off, "format_extensions" =
-// ".c,.h" list) and save it. 0 on success.
+// "others_name" = folder name, "auto_format" = on/off, "auto_tidy" =
+// off/warn/fix, "format_extensions" = ".c,.h" list) and save it. 0 on success.
 int SetConfigValue(const char *key, const char *value)
 {
     __ConfigLoad();
@@ -611,6 +639,22 @@ int IsAutoFormatEnabled(void)
 {
     __ConfigLoad();
     return jarvis_config.auto_format;
+}
+
+// Is "jarvis tidy" run automatically before each "jarvis push" ? (off by
+// default) 1 for the modes warn and fix, GetTidyMode says which one.
+int IsAutoTidyEnabled(void)
+{
+    __ConfigLoad();
+    return jarvis_config.auto_tidy != TIDY_MODE_OFF;
+}
+
+// What is done with "jarvis tidy" before each "jarvis push" : TIDY_MODE_OFF
+// (default), TIDY_MODE_WARN or TIDY_MODE_FIX
+int GetTidyMode(void)
+{
+    __ConfigLoad();
+    return jarvis_config.auto_tidy;
 }
 
 const char *GetDefaultFormatExtensions(void)

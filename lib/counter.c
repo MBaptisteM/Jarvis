@@ -27,7 +27,7 @@ static int __CounterStar(void)
 // Ask once if the user accepts to be counted. Never asks without a terminal
 // (scripts, "jarvis fill" clones...), nor when the user is not connected to
 // GitHub : the question is then asked another time.
-static void CounterAsk(void)
+void CounterAsk(void)
 {
     if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)
         || getenv("JARVIS_FILL") != NULL)
