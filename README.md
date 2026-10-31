@@ -17,6 +17,7 @@
 # Table of Contents
 
 * [Overview](#overview)
+* [Installation](#installation)
 * [Features](#features)
   * [Authentication](#authentication)
   * [Enhanced Clone](#enhanced-clone)
@@ -25,7 +26,7 @@
   * [Sync & Locate](#sync--locate)
   * [Customizable Organization](#customizable-organization)
   * [Code Formatting](#code-formatting)
-* [Installation](#installation)
+  * [Code Style Check](#code-style-check)
 * [Commands](#commands)
   * [Authentication](#authentication-command)
   * [Clone](#clone-command)
@@ -33,11 +34,13 @@
   * [Pull](#pull-command)
   * [Push](#push-command)
   * [Format](#format-command)
+  * [Tidy](#tidy-command)
   * [Find](#find-command)
   * [Go](#go-command)
   * [Custom](#custom-command)
   * [Erase](#erase-command)
   * [Help](#help-command)
+  * [Counter](#counter)
   * [Uninstall](#uninstall-command)
   * [Shortcuts](#shortcuts)
 * [License](#license)
@@ -59,6 +62,31 @@ It is an open source tool that helps EPITA students to :
 * Reconstruct assignment structures.
 
 ---
+
+# Installation
+
+Install Jarvis directly from your terminal using the automated setup script.
+
+### Usage
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MBaptisteM/Jarvis/main/setup.sh | bash
+```
+
+### What happens
+
+1. A temporary workspace is created on your system.
+2. The latest version of Jarvis is downloaded.
+3. The setup script configures and installs the tool.
+4. Temporary files are safely cleaned up.
+
+For browser authentication, Jarvis uses the system Chromium package installed
+with `nix profile add nixpkgs#chromium` on NixOS, because the generic Chromium
+downloaded by Playwright is not directly executable there. On other Unix
+systems, Jarvis continues to install Chromium through Playwright.
+
+---
+
 
 # Features
 
@@ -169,6 +197,8 @@ Choose how your workspace is laid out with `jarvis custom`.
 * Rename the `Others` folder.
 * Enable the automatic code formatting before each push and choose which file
   extensions are formatted (see [Code Formatting](#code-formatting)).
+* Choose what is done with `jarvis tidy` before each push: nothing, warn or fix
+  (see [Code Style Check](#code-style-check)).
 * Existing repositories are moved to their new location when you leave the menu.
 * The root repository can be pushed right away.
 
@@ -183,29 +213,16 @@ Format your code with `clang-format` in one command, or automatically before eve
 * The formatted extensions can be edited (add / remove / restore the default list).
 * A formatting problem is reported but never blocks a push.
 
----
 
-# Installation
 
-Install Jarvis directly from your terminal using the automated setup script.
+## Code Style Check
 
-### Usage
+Check the style rules of your C / C++ code in one command, or automatically before every push.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MBaptisteM/Jarvis/main/setup.sh | bash
-```
-
-### What happens
-
-1. A temporary workspace is created on your system.
-2. The latest version of Jarvis is downloaded.
-3. The setup script configures and installs the tool.
-4. Temporary files are safely cleaned up.
-
-For browser authentication, Jarvis uses the system Chromium package installed
-with `nix profile add nixpkgs#chromium` on NixOS, because the generic Chromium
-downloaded by Playwright is not directly executable there. On other Unix
-systems, Jarvis continues to install Chromium through Playwright.
+* `jarvis tidy [<path>]` scans every C / C++ file of the current folder (or of the given folder) and its sub-folders.
+* Every problem is listed as `<file>:<line>: <problem>`.
+* Problems that can be fixed (include guard names, `#endif` comments, final newline) are fixed on request, or without asking with `--fix`.
+* The automatic behavior before `jarvis push` (nothing, warn or fix) is set in `jarvis custom`. It is disabled by default.
 
 ---
 
@@ -258,6 +275,8 @@ jarvis clone [all | current/c/cu/cur/curr | <remote-repository>]
 ### Example
 
 ```bash
+jarvis clone
+jarvis clone current
 jarvis clone firstname.lastname@git.forge.epita.fr:p/example/repository.git
 ```
 
@@ -302,6 +321,7 @@ is placed by its semester/bimester, whatever its project.
 
 ```bash
 jarvis fill
+jarvis fill all
 jarvis fill now
 jarvis fill epita-prepa-computer-science
 ```
@@ -332,6 +352,7 @@ remote's default branch.
 ```bash
 jarvis pull
 jarvis pull current
+jarvis pull my_project
 ```
 
 
@@ -360,8 +381,8 @@ Options:
 | `-t`, `--tag <name>`    | Creates and pushes a tag named `<name>-<number>` (ex: `v1` gives `v1-0`, then `v1-1`...). |
 | `-p`, `--path <path>`   | Same as `<path>`; `root` and `current` also work as values.              |
 
-`--name=<name>`, `--tag=<name>` and `--path=<path>` work too, and `--name` is
-an alias of `--name`. An unknown option stops the command with an error. The older
+`--name=<name>`, `--tag=<name>` and `--path=<path>` work too (ex: `--name="Fix"`).
+An unknown option stops the command with an error. The older
 `name=<name>` and `tag=<name>` arguments are still accepted.
 
 The repository is pushed first, then the root repository, which records the new
@@ -372,6 +393,14 @@ If the automatic format is enabled (see [Custom](#custom-command)), the
 repository is formatted before it is committed. The root repository alone
 (`jarvis push root`, or a push from the root repository) is never formatted,
 since it would reformat every repository of the tree.
+
+The tidy mode set in `jarvis custom` decides what is done with `jarvis tidy`
+before the push:
+
+* **nothing** (default): no check.
+* **warn**: on a problem, you choose to push anyway or to cancel the push.
+* **fix**: the problems that can be fixed are fixed in the files, the others are
+  reported like with warn.
 
 ### Reliable reporting
 
@@ -395,6 +424,7 @@ since it would reformat every repository of the tree.
 
 ```bash
 jarvis push
+jarvis push current
 jarvis push root
 jarvis push -n "Fix bug" -t v1 -p ~/EPITA-TPs/S1/B2/my_repository
 jarvis push --name="Fix bug" --path current
@@ -440,6 +470,59 @@ The extensions, and the automatic run before each `jarvis push`, are set in
 ```bash
 jarvis format
 jarvis format ../EPITA-TPs
+j fm
+```
+
+
+
+## Tidy Command
+
+Check the style rules of the code of the current folder.
+
+### Usage
+
+```bash
+jarvis tidy [-f | --fix] [<path> | -p <path>]
+```
+
+* No argument: checks the current folder.
+* `<path>` (or `-p`, `--path <path>`): checks this folder instead.
+* `-f`, `--fix`: fixes what can be fixed without asking, and reports the rest.
+
+Scans every C / C++ file (`.c`, `.h`, `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`,
+`.hxx`) of the folder and all its sub-folders, and lists every problem as
+`<file>:<line>: <problem>` in an Info panel.
+
+Nothing is modified without your answer: when problems that can be fixed are
+found (include guard names, `#endif` comments, final newline), Jarvis asks
+whether to fix them, and warns you about the others, which stay to fix by hand.
+With `--fix` they are fixed without asking (nothing is asked outside a terminal).
+A function with too many lines or arguments is never modified. The exit code is
+not zero when a problem is left.
+
+`.git` and `node_modules` folders are skipped. In the lines of a function, blank
+lines, comments and lines made of braces only are not counted.
+
+### Checks
+
+| Check          | Rule                                                                                         |
+|----------------|----------------------------------------------------------------------------------------------|
+| Arguments      | At most 4 arguments per function.                                                            |
+| Length         | At most 30 lines per function.                                                               |
+| Newline        | Every file ends with a newline.                                                              |
+| `#endif`       | Followed by a comment with exactly the name of its `#if` (ex: `#endif /* DEBUG */`).         |
+| Header guard   | A header starts with `#ifndef <FILE NAME>_H` in upper case (`test.h`: `TEST_H`), followed by `#define` with the same name. |
+
+What is done automatically before each `jarvis push` (nothing, warn or fix;
+nothing by default) is set in `jarvis custom` > **Tidy**.
+
+### Example
+
+```bash
+jarvis tidy
+jarvis tidy --fix
+jarvis tidy ../EPITA-TPs
+j t
 ```
 
 
@@ -463,7 +546,9 @@ jarvis find [root | current/c/cu/cur/curr | <repository> | <keyword>]
 ### Example
 
 ```bash
+jarvis find root
 jarvis find current
+jarvis find firstname.lastname@git.forge.epita.fr:p/example/repository.git
 jarvis find "trees"
 ```
 
@@ -490,6 +575,7 @@ effect in new shells.
 ### Example
 
 ```bash
+jarvis go root
 jarvis go current
 jarvis go "trees"
 ```
@@ -498,7 +584,7 @@ jarvis go "trees"
 
 ## Custom Command
 
-Customize the tree structure of your repositories.
+Customize the tree structure and the format (layers, prefixes, Others, Format, Tidy).
 
 ### Usage
 
@@ -519,13 +605,19 @@ typed):
     `.c++`, `.json`, `.pb.txt`). Invalid entries are reported and ignored.
   * **remove**: type the extensions to remove, with the same rules.
   * **show the list** and **restore the default ones**.
+* **Tidy**: choose what `jarvis tidy` does before each push:
+  * **nothing** (default).
+  * **warn**: if problems are found, you choose to push anyway or to cancel.
+  * **fix**: names, comments and newlines are fixed in the files, the other
+    problems are reported.
 * **Reset**: go back to the default organization.
 * **Save**: applies the changes to your existing repositories (they are moved) and pushes the root repository.
 * **Quit**: applies the changes to your existing repositories, without pushing.
 
 The settings are stored in the `.jarvis_config` file of the root repository, so
-once pushed they are shared by every Jarvis using it. Format settings are saved
-immediately; use **Save** to push them.
+once pushed they are shared by every Jarvis using it (it is created with the
+default values if missing). Format and Tidy settings are saved immediately; use
+**Save** to push them.
 
 Repositories in the `Others` folder are never moved (unless the folder is renamed).
 
@@ -563,7 +655,35 @@ List the commands, or show the usage of one of them.
 jarvis help [command]
 ```
 
-`jarvis <command> --help` works too.
+`<command>` is the name or the shortcut of a command. `jarvis <command> --help`
+works too.
+
+### Example
+
+```bash
+jarvis help
+jarvis help clone
+j h c
+```
+
+
+
+## Counter
+
+How the Jarvis user counter works (`jarvis help counter`).
+
+Jarvis counts its users with the stars of its GitHub repository
+(`MBaptisteM/Jarvis`). The first time you use Jarvis in a terminal while
+connected to GitHub (`gh`), it asks whether you accept to be counted. If you say
+yes, a star is added to the repository with your GitHub account.
+
+* The question is asked only once, your answer is saved and Jarvis works the
+  same whatever you answer.
+* The counter is not anonymous: the list of the people who starred a repository
+  is public on GitHub.
+* This way was chosen because it is the simplest to show publicly how many
+  people use Jarvis without an external server.
+* To leave the count, remove the star on the GitHub page of the repository.
 
 
 
@@ -595,6 +715,7 @@ Are you sure you want to uninstall Jarvis? [y/N]
 | `pull`      | `pl`     |
 | `push`      | `ps`     |
 | `format`    | `fm`     |
+| `tidy`      | `t`      |
 | `find`      | `f`      |
 | `go`        | `g`      |
 | `help`      | `h`      |
