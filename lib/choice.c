@@ -1,12 +1,71 @@
 #include "choice.h"
 
+// State wanted while a question is displayed (raw mode)
+static struct termios choice_raw;
+static int choice_raw_valid = 0;
+
+// Another process can put the terminal back in normal mode while a question is
+// displayed (a download that ends in the background, a git / ssh command...) :
+// the keys are then written on the screen (^[[A, ^[[B) instead of being read
+// by the menu. Check it and set the raw mode again if needed.
+static void __KeepRawMode(void)
+{
+    struct termios now;
+    if (!choice_raw_valid || tcgetattr(STDIN_FILENO, &now) != 0)
+        return;
+
+    if ((now.c_lflag & (ECHO | ICANON)) != 0)
+        tcsetattr(STDIN_FILENO, TCSANOW, &choice_raw);
+}
+
+// Read one byte of stdin without ever staying blocked with a wrong terminal
+// state. timeout_ms < 0 : wait as long as needed.
+// 1 : a byte was read | 0 : timeout | -1 : end of input
+static int __ReadByte(unsigned char *c, int timeout_ms)
+{
+    int waited = 0;
+    while (1)
+    {
+        __KeepRawMode();
+
+        int tick = CHOICE_TICK_MS;
+        if (timeout_ms >= 0 && timeout_ms - waited < tick)
+            tick = timeout_ms - waited;
+
+        struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
+        int ready = poll(&pfd, 1, tick);
+        if (ready < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+
+        if (ready > 0)
+        {
+            ssize_t count = read(STDIN_FILENO, c, 1);
+            if (count == 1)
+                return 1;
+            if (count < 0 && errno == EINTR)
+                continue;
+            return -1;
+        }
+
+        waited += tick;
+        if (timeout_ms >= 0 && waited >= timeout_ms)
+            return 0;
+    }
+}
+
 // Let the user choose and option and return the index of the option
+// (-1 if the input is closed)
 int ChoiceMCQ(const char *options[], int num_choices)
 {
     struct termios orig;
     __EnableRawMode(&orig);
 
     int choice = 0;
+    int closed = 0;
 
     while (1)
     {
@@ -17,21 +76,31 @@ int ChoiceMCQ(const char *options[], int num_choices)
             else
                 printf("  %s\n", options[i]);
         }
+        fflush(stdout);
 
-        char c = getchar();
+        unsigned char c;
+        if (__ReadByte(&c, -1) <= 0)
+        {
+            closed = 1;
+            break;
+        }
 
         if (c == 27)
         {
-            getchar();
-
-            char dir = getchar();
-            if (dir == 'A')
-                choice = (choice - 1 + num_choices) % num_choices;
-
-            if (dir == 'B')
-                choice = (choice + 1) % num_choices;
+            // Arrow : ESC [ A / ESC [ B (ESC O A / ESC O B in some terminals)
+            unsigned char start;
+            unsigned char dir;
+            if (__ReadByte(&start, CHOICE_ESC_MS) == 1
+                && (start == '[' || start == 'O')
+                && __ReadByte(&dir, CHOICE_ESC_MS) == 1)
+            {
+                if (dir == 'A')
+                    choice = (choice - 1 + num_choices) % num_choices;
+                if (dir == 'B')
+                    choice = (choice + 1) % num_choices;
+            }
         }
-        else if (c == '\n')
+        else if (c == '\n' || c == '\r')
         {
             break;
         }
@@ -57,9 +126,10 @@ int ChoiceMCQ(const char *options[], int num_choices)
 
     // Moove the cursor
     printf("\033[%uA", num_choices);
+    fflush(stdout);
 
     __DisableRawMode(&orig);
-    return choice;
+    return closed ? -1 : choice;
 }
 
 void __EnableRawMode(struct termios *orig)
@@ -68,11 +138,17 @@ void __EnableRawMode(struct termios *orig)
     tcgetattr(STDIN_FILENO, orig);
     raw = *orig;
     raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+    choice_raw = raw;
+    choice_raw_valid = 1;
 }
 
 void __DisableRawMode(struct termios *orig)
 {
+    choice_raw_valid = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH, orig);
     if (system("stty sane") == -1)
         errx(EXIT_FAILURE, "ERROR Impossible to reset the terminal");

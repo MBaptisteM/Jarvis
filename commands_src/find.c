@@ -129,7 +129,7 @@ void __FindRoot(void)
 
     __TrimTrailing(main_folder_path);
 
-    UiInfo("%s", main_folder_path);
+    printf("%s\n", main_folder_path);
 
     free(main_folder_path);
 }
@@ -238,7 +238,7 @@ void __FindCurrent(void)
         WriteInfo("current", path);
     }
 
-    UiInfo("%s", path);
+    printf("%s\n", path);
 
     free(path);
     free(main_folder_path);
@@ -287,12 +287,12 @@ void __FindRepository(char *repo_arg)
 
             // FindFileBFS returns the parent folder of what was found
             char *joined_path = __JoinFound(found_path, repo_name);
-            UiInfo("%s", joined_path);
+            printf("%s\n", joined_path);
             free(joined_path);
             free(found_path);
         }
         else
-            UiInfo("%s", repo_path);
+            printf("%s\n", repo_path);
 
         free(repo_name);
         free(main_folder_path);
@@ -427,7 +427,7 @@ void __FindEpitaUrlInTree(char *url)
                 if (strncasecmp(entry->d_name, stubborn, len_stubborn) == 0
                     && entry->d_name[len_stubborn] == '-')
                 {
-                    UiInfo("%s", full_path);
+                    printf("%s\n", full_path);
                     found_any = 1;
                 }
             }
@@ -452,7 +452,7 @@ void __FindEpitaUrlInTree(char *url)
 
         if (IsDirectory(other_path))
         {
-            UiInfo("%s", other_path);
+            printf("%s\n", other_path);
             found_any = 1;
         }
     }
@@ -552,7 +552,7 @@ void __SearchTree(const char *path, const char *word, int *found_any)
 
         if (__ContainsWord(entry->d_name, word))
         {
-            UiInfo("%s", full_path);
+            printf("%s\n", full_path);
             (*found_any) = 1;
             continue;
         }

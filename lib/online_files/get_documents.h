@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <ctype.h>
 
 #include "choice.h"
 #include "ui.h"
@@ -22,6 +23,11 @@
 
 #define SUBJECT "EMBEDDED_subject.html"
 #define GIVEN_FILES "assets.tar.gz"
+
+#define JARVIS_DETACH_TTY "</dev/null 2>&1"
+
+#define SPINNER_LOG_MAX 16384
+#define SPINNER_FRAME_MS 100
 
 int DowloadPage(char *url, char *file_name);
 int GetSubject(char *repo_name);

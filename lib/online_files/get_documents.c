@@ -1,10 +1,5 @@
 #include "get_documents.h"
 
-#include <ctype.h>
-
-#define SPINNER_LOG_MAX 16384
-#define SPINNER_FRAME_MS 100
-
 // Terminal width (80 when unknown)
 static int __TerminalWidth(void)
 {
@@ -249,8 +244,8 @@ int DowloadPage(char *url, char *file_name)
 
     char cmd_subject[1024];
     snprintf(cmd_subject, sizeof(cmd_subject),
-             "%s/./setup_get_subject run \"%s\" %s %s %s", subject_path,
-             page_path, subject_path, file_name, jarvis_path);
+             "%s/./setup_get_subject run \"%s\" %s %s %s " JARVIS_DETACH_TTY,
+             subject_path, page_path, subject_path, file_name, jarvis_path);
     free(jarvis_path);
 
     FILE *fp_page = popen(cmd_subject, "r");
@@ -290,8 +285,8 @@ int GetSubject(char *repo_name)
     // Get subject
     char cmd_subject[1024];
     snprintf(cmd_subject, sizeof(cmd_subject),
-             "%s/./setup_get_subject run \"%s%s%s\" %s", subject_path, URL,
-             local_url_repo, SUBJECT, subject_path);
+             "%s/./setup_get_subject run \"%s%s%s\" %s " JARVIS_DETACH_TTY,
+             subject_path, URL, local_url_repo, SUBJECT, subject_path);
 
     FILE *fp_subject = popen(cmd_subject, "r");
     if (!fp_subject)
@@ -328,8 +323,9 @@ int GetGivenFiles(char *repo_name)
     // Get given files
     char cmd_given_files[1024];
     snprintf(cmd_given_files, sizeof(cmd_given_files),
-             "%s/./setup_get_subject download \"%s%s%s\" %s", subject_path, URL,
-             local_url_repo, GIVEN_FILES, subject_path);
+             "%s/./setup_get_subject download \"%s%s%s\" %s "
+             "</dev/null >/dev/null 2>&1",
+             subject_path, URL, local_url_repo, GIVEN_FILES, subject_path);
 
     int status = system(cmd_given_files);
     if (status == -1)
@@ -349,7 +345,11 @@ int GetGivenFiles(char *repo_name)
 #define AUTH_CHECK_FILE "AuthCheck.html"
 #define AUTH_CHECK_MAX (2 * 1024 * 1024)
 
-// Check that the saved session really is a signed-in one
+// Check that the saved session really is a signed-in one : the home page is
+// downloaded with it and must not be the sign-in form (password field), and
+// must contain the projects. A window closed without signing in, or wrong
+// credentials, still leave an auth.json behind : its presence proves nothing.
+// 1 : signed in | 0 : not signed in (or impossible to check)
 static int __SessionIsValid(const char *subject_path)
 {
     char *jarvis_path = NULL;

@@ -283,13 +283,10 @@ static const char *HEAL_SUBMODULES_SCRIPT =
     "git rm --cached -q -f -- \"$p\"; "
     "fi; done; true";
 
-// ---------------------------------------------------------------------------
-// Push helpers
-//
+    
 // Every step reports its own problem and never stops the program : the caller
 // decides what to do with the result. "Pushed" is only announced when git
 // really sent commits to the remote (checked after the push).
-// ---------------------------------------------------------------------------
 
 // Result of the push functions (same values in push.c)
 #ifndef JARVIS_PUSH_PUSHED
@@ -543,42 +540,44 @@ static int __StatusToExit(int status)
 }
 
 // A nested repository that has no commit yet can't be added by git : it refuses
-// ("does not have a commit checked out") and stages nothing at all. Its .git is
-// hidden during the add, and put back right after.
-static const char *PARK_COMMAND =
+// ("does not have a commit checked out") and stages nothing at all. Such a
+// repository is simply left out of the add (an ":(exclude)" pathspec) : its
+// .git is NEVER moved, renamed or touched, so nothing can be lost if Jarvis is
+// interrupted or if two Jarvis run at the same time. Needs git >= 2.25
+// (--pathspec-from-file).
+static const char *STAGE_COMMAND =
+    "{ printf '.\\0:(exclude,glob)**/.git.jarvis-tmp\\0"
+    ":(exclude,glob)**/.git.jarvis-tmp/**\\0'; "
     "find . -path './.git' -prune -o -name .git -prune "
-    "-exec sh -c 'for git_dir do repo=${git_dir%/.git}; "
-    "if ! git -C \"$repo\" rev-parse --verify HEAD >/dev/null 2>&1; "
-    "then test ! -e \"$git_dir.jarvis-tmp\" && "
-    "mv -- \"$git_dir\" \"$git_dir.jarvis-tmp\" || exit 1; "
-    "fi; done' _ {} +";
-static const char *RESTORE_COMMAND =
+    "-exec sh -c 'for git_dir do repo=${git_dir%/.git}; repo=${repo#./}; "
+    "if ! git -C \"$repo\" rev-parse --verify -q HEAD >/dev/null 2>&1; "
+    "then printf \":(exclude,literal)%s\\0\" \"$repo\"; fi; done' _ {} +; } "
+    "| git add -A --pathspec-from-file=- --pathspec-file-nul";
+
+// Older versions of Jarvis hid the .git of the empty nested repositories as
+// .git.jarvis-tmp while adding, and a push interrupted at that moment left them
+// hidden (the repository then looks like it has no .git). Put them back when
+// nothing else took their place.
+static const char *REPAIR_COMMAND =
     "find . -path './.git' -prune -o -name .git.jarvis-tmp -prune "
-    "-exec sh -c 'for saved do mv -- \"$saved\" "
-    "\"${saved%.jarvis-tmp}\" || exit 1; done' _ {} +";
+    "-exec sh -c 'for saved do target=${saved%.jarvis-tmp}; "
+    "if [ ! -e \"$target\" ]; then mv -- \"$saved\" \"$target\" "
+    "&& echo \"Jarvis: restored $target\"; fi; done' _ {} +";
 
 // Stage everything of the current repository. EXIT_SUCCESS if all went well,
 // the problems are displayed as warnings.
 static int __StageAll(void)
 {
-    if (system(PARK_COMMAND) != 0)
-        UiWarning("Impossible to hide the empty nested repositories, trying "
-                  "to add anyway.");
+    if (system(REPAIR_COMMAND) != 0)
+        UiWarning("Impossible to restore the .git.jarvis-tmp folders left by a "
+                  "previous push (look for them and rename them to .git).");
 
-    int add_result = system("git add -A -- . ':(exclude)**/.git.jarvis-tmp' "
-                            "':(exclude)**/.git.jarvis-tmp/**'");
-
-    // Always put the metadata back, even if the add failed
-    int restore_result = system(RESTORE_COMMAND);
-    if (restore_result != 0)
-        UiWarning("Unable to restore nested Git metadata (look for "
-                  ".git.jarvis-tmp folders).");
-
+    int add_result = system(STAGE_COMMAND);
     if (add_result != 0)
         UiWarning("Some elements could not be added (see the git message "
                   "above).");
 
-    return add_result != 0 || restore_result != 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    return add_result != 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 int AddRepoRoot()
