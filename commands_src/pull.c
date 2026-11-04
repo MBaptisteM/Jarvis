@@ -1,6 +1,5 @@
 #include "pull.h"
 
-
 int main(int argc, char *argv[])
 {
     // Ask once if the user accepts to be counted (GitHub star)
@@ -309,7 +308,6 @@ void __PullRepository(char *repo_arg)
     free(main_folder_path);
 }
 
-
 static unsigned __PullJobs(void)
 {
     const char *value = getenv("JARVIS_JOBS");
@@ -413,7 +411,10 @@ static void __ProgressDraw(void)
     if (!pull_tty || pull_total == 0)
         return;
 
-    enum { BAR = 20 };
+    enum
+    {
+        BAR = 20
+    };
     size_t filled = pull_done * BAR / pull_total;
     char bar[BAR * 3 + 1];
     size_t used = 0;

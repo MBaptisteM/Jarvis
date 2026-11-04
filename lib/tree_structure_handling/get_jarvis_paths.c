@@ -436,8 +436,8 @@ static int __ConfigWrite(const char *path, const JarvisConfig *config)
     failed |=
         fprintf(file, "auto_format = %s\n", config->auto_format ? "on" : "off")
         < 0;
-    failed |= fprintf(file, "auto_tidy = %s\n",
-                      CONFIG_TIDY_MODES[config->auto_tidy])
+    failed |=
+        fprintf(file, "auto_tidy = %s\n", CONFIG_TIDY_MODES[config->auto_tidy])
         < 0;
     failed |=
         fprintf(file, "format_extensions = %s\n", config->format_extensions)
@@ -797,8 +797,7 @@ int GetDotJarvisPath(char **path)
         // EPITA : ~/.jarvis is a symlink to ~/afs/.config/jarvis
         char link_path[512];
         snprintf(link_path, sizeof(link_path), "%s/.jarvis", home);
-        if (lstat(link_path, &config_stat) == 0
-            && S_ISLNK(config_stat.st_mode))
+        if (lstat(link_path, &config_stat) == 0 && S_ISLNK(config_stat.st_mode))
         {
             snprintf(*path, 512, "%s", link_path);
             return EXIT_SUCCESS;

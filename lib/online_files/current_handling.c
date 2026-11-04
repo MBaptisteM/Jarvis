@@ -1,7 +1,9 @@
 #include "current_handling.h"
 
 #include <ctype.h>
+#include <stdatomic.h>
 #include <strings.h>
+#include <unistd.h>
 
 int IsCurrentKeyword(const char *argument)
 {
@@ -9,6 +11,72 @@ int IsCurrentKeyword(const char *argument)
         || strcasecmp(argument, "c") == 0 || strcasecmp(argument, "cu") == 0
         || strcasecmp(argument, "cur") == 0
         || strcasecmp(argument, "curr") == 0;
+}
+
+
+// Spinner : "<frame> <label>" redrawn on one line while the pages are loaded,
+// instead of one panel per downloaded page. Without a terminal, the label is
+// only written once.
+
+#define SPINNER_FRAME_US 100000
+
+static pthread_t spinner_thread;
+static int spinner_active = 0;
+static int spinner_registered = 0;
+static atomic_int spinner_stop = 0;
+static const char *spinner_label = "";
+
+static void *__SpinnerLoop(void *unused)
+{
+    static const char *frames[] = { "|", "/", "-", "\\" };
+    (void)unused;
+
+    for (size_t frame = 0; !atomic_load(&spinner_stop); frame++)
+    {
+        printf("\r\033[K\033[36m%s\033[0m %s", frames[frame % 4],
+               spinner_label);
+        fflush(stdout);
+        usleep(SPINNER_FRAME_US);
+    }
+    return NULL;
+}
+
+// Stop the spinner and erase its line (nothing happens if it is not running)
+static void __SpinnerStop(void)
+{
+    if (!spinner_active)
+        return;
+
+    spinner_active = 0;
+    atomic_store(&spinner_stop, 1);
+    pthread_join(spinner_thread, NULL);
+    printf("\r\033[K");
+    fflush(stdout);
+}
+
+// label must stay valid until __SpinnerStop (string literal)
+static void __SpinnerStart(const char *label)
+{
+    if (!isatty(STDOUT_FILENO))
+    {
+        printf("%s...\n", label);
+        fflush(stdout);
+        return;
+    }
+
+    __SpinnerStop();
+    spinner_label = label;
+    atomic_store(&spinner_stop, 0);
+    if (pthread_create(&spinner_thread, NULL, __SpinnerLoop, NULL) != 0)
+        return;
+    spinner_active = 1;
+
+    // An error that stops the program must not leave the spinner line behind
+    if (!spinner_registered)
+    {
+        spinner_registered = 1;
+        atexit(__SpinnerStop);
+    }
 }
 
 typedef struct
@@ -87,6 +155,18 @@ void *ThreadExtractURL(void *arg)
 
 char *GetCurrentRepo()
 {
+    // Sign in first if needed : the question must not be drawn over the
+    // spinner
+    char auth_path[512];
+    snprintf(auth_path, sizeof(auth_path), "%s/auth.json",
+             GetSubjectFolderPath());
+    if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
+        errx(EXIT_FAILURE,
+             "ERROR You are not authenticated. Run 'jarvis auth' and sign in "
+             "to the forge.");
+
+    __SpinnerStart("Looking for your current repositories on the forge");
+
     int ind_urls = 0;
     char *projects_url[256];
 
@@ -141,10 +221,13 @@ char *GetCurrentRepo()
         if (ind_pages > 0)
             break;
 
+        // The user has to answer : no spinner while signing in again
+        __SpinnerStop();
         if (attempt >= 2 || Reauth() != EXIT_SUCCESS)
             errx(EXIT_FAILURE,
                  "ERROR No project page found on the home page : you are not "
                  "signed in to the forge. Run 'jarvis auth' and sign in.");
+        __SpinnerStart("Looking for your current repositories on the forge");
     }
 
     int ind_repos = 0;
@@ -180,6 +263,9 @@ char *GetCurrentRepo()
                  "retry)");
         }
     }
+
+    // Every page is loaded : the question can be asked
+    __SpinnerStop();
 
     for (int i = 0; i < ind_pages; i++)
         free(pages_url[i]);
@@ -261,7 +347,6 @@ int PageDownload(char *url, char *file_name)
              "ERROR Impossible to get the home page (failed twice). [Retry or "
              "Auth again]");
 
-    UiInfo("Downloaded with %s%s in %s", URL, url, file_name);
     return EXIT_SUCCESS;
 }
 
@@ -368,17 +453,13 @@ static char *__PromptLine(const char *message)
     return __DuplicateRange(buffer, strlen(buffer));
 }
 
-// Download a page without ever stopping the program. 0 on success.
+// Download a page without ever stopping the program (and without writing
+// anything : the caller reports the failure). 0 on success.
 static int __SoftPageDownload(char *url, char *file_name)
 {
     int result = DowloadPage(url, file_name);
     if (result)
         result = DowloadPage(url, file_name);
-
-    if (result)
-        UiWarning("Impossible to download %s", url);
-    else
-        UiInfo("Downloaded with %s%s in %s", URL, url, file_name);
 
     return result;
 }
@@ -554,8 +635,15 @@ char *ExtractRepo(char *url)
                 // Never read a page left by a previous run
                 remove(file_path);
 
-                if (__SoftPageDownload(page_url, "RepoPage.html") == 0)
+                __SpinnerStart("Looking for the git url of the repository");
+                int downloaded =
+                    __SoftPageDownload(page_url, "RepoPage.html") == 0;
+                __SpinnerStop();
+
+                if (downloaded)
                     repo_url = __FindGitUrlInPage(file_path);
+                else
+                    UiWarning("Impossible to download %s", page_url);
             }
         }
     }

@@ -12,12 +12,23 @@ echo -e "${CYAN}${BOLD}>>> Starting the installation process...${NC}\n"
 
 export PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin:$PATH"
 if ! command -v git >/dev/null 2>&1; then
-    if ! command -v nix >/dev/null 2>&1; then
-        echo -e "${RED}${BOLD}Error:${NC} Git is required. Install it with: nix profile add nixpkgs#git"
+    git_installed=0
+    # "nix profile add" only exists in recent Nix, older ones use "install"
+    if command -v nix >/dev/null 2>&1 \
+        && { nix profile add nixpkgs#git || nix profile install nixpkgs#git; }; then
+        git_installed=1
+    elif command -v apt-get >/dev/null 2>&1; then
+        if [ "$(id -u)" -eq 0 ]; then
+            apt-get install -y git && git_installed=1
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo apt-get install -y git && git_installed=1
+        fi
+    fi
+    export PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin:$PATH"
+    if [ "$git_installed" -ne 1 ] || ! command -v git >/dev/null 2>&1; then
+        echo -e "${RED}${BOLD}Error:${NC} Git is required. Install it with: sudo apt install git (or: nix profile add nixpkgs#git)"
         exit 1
     fi
-    nix profile add nixpkgs#git
-    export PATH="$HOME/.nix-profile/bin:$HOME/.local/state/nix/profiles/profile/bin:$PATH"
 fi
 
 # --- 1. Create a temporary directory ---

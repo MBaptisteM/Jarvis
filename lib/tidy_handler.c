@@ -5,7 +5,7 @@ static const char *IGNORED_FOLDERS[] = { ".git", ".git.jarvis-tmp",
                                          "node_modules" };
 
 // Files checked
-static const char *SOURCE_EXTENSIONS[] = { ".c",  ".h",  ".cc",  ".cpp",
+static const char *SOURCE_EXTENSIONS[] = { ".c",   ".h",  ".cc",  ".cpp",
                                            ".cxx", ".hh", ".hpp", ".hxx" };
 
 // Files that are headers (include guard checked)
@@ -18,7 +18,6 @@ static size_t total_fixable = 0; // of total_problems
 static size_t files_fixed = 0;
 static size_t total_fixed = 0;
 static int fix_mode = 0; // 1 : the problems that can be fixed are fixed
-
 
 // Problems of one file
 
@@ -37,8 +36,8 @@ typedef struct
     size_t capacity;
 } ProblemList;
 
-static void __VAdd(ProblemList *list, size_t line, int fixable,
-                   const char *fmt, va_list args)
+static void __VAdd(ProblemList *list, size_t line, int fixable, const char *fmt,
+                   va_list args)
 {
     va_list copy;
     va_copy(copy, args);
@@ -107,7 +106,6 @@ static void __FreeProblems(ProblemList *list)
     list->count = 0;
     list->capacity = 0;
 }
-
 
 // Fixes of one file : lines to replace, lines to insert after a line, and a
 // missing newline at the end of the file
@@ -182,7 +180,6 @@ static void __FixEndif(FixSet *fix, size_t l, const char *line, size_t length,
 
 // Small helpers
 
-
 static int __IsIdentChar(char c)
 {
     return isalnum((unsigned char)c) || c == '_';
@@ -205,7 +202,8 @@ static int __HasWord(const char *s, size_t length, const char *word)
     for (size_t i = 0; i + word_length <= length; i++)
         if (strncmp(s + i, word, word_length) == 0
             && (i == 0 || !__IsIdentChar(s[i - 1]))
-            && (i + word_length == length || !__IsIdentChar(s[i + word_length])))
+            && (i + word_length == length
+                || !__IsIdentChar(s[i + word_length])))
             return 1;
     return 0;
 }
@@ -228,14 +226,12 @@ static void __GuardName(const char *name, char *out, size_t size)
 {
     size_t k = 0;
     for (const char *c = name; *c != '\0' && k + 1 < size; c++)
-        out[k++] = isalnum((unsigned char)*c) ? (char)toupper((unsigned char)*c)
-                                               : '_';
+        out[k++] =
+            isalnum((unsigned char)*c) ? (char)toupper((unsigned char)*c) : '_';
     out[k] = '\0';
 }
 
-
 // Source : the text of a file and a "clean" version of it
-
 
 typedef struct
 {
@@ -429,9 +425,7 @@ static size_t __LineOf(const Source *src, size_t offset)
     return low;
 }
 
-
 // #if / #endif and include guard
-
 
 typedef struct
 {
@@ -567,7 +561,8 @@ static void __GuardDefineMissing(Guard *g)
 {
     g->define_checked = 1;
     __AddFixable(g->list, g->first_line + 1,
-                 "the include guard #ifndef must be followed by #define %s", g->guard);
+                 "the include guard #ifndef must be followed by #define %s",
+                 g->guard);
     if (g->fix != NULL)
         __FixSet(g->fix, &g->fix->after[g->first_line], "#define %s", g->guard);
 }
@@ -592,8 +587,8 @@ static void __CheckGuardStart(Guard *g, const char *keyword,
     if (strcmp(name, g->guard) == 0)
         return;
 
-    __AddFixable(g->list, l + 1, "include guard is \"%s\", expected \"%s\"", name,
-          g->guard);
+    __AddFixable(g->list, l + 1, "include guard is \"%s\", expected \"%s\"",
+                 name, g->guard);
     if (g->fix != NULL)
         __FixSet(g->fix, &g->fix->replace[l], "#ifndef %s", g->guard);
 }
@@ -628,8 +623,9 @@ static void __CheckGuardDefine(Guard *g, const char *keyword,
     if (strcmp(name, g->guard) == 0)
         return;
 
-    __AddFixable(g->list, l + 1, "include guard #define is \"%s\", expected \"%s\"",
-          name, g->guard);
+    __AddFixable(g->list, l + 1,
+                 "include guard #define is \"%s\", expected \"%s\"", name,
+                 g->guard);
     if (g->fix != NULL)
         __FixSet(g->fix, &g->fix->replace[l], "#define %s", g->guard);
 }
@@ -666,7 +662,8 @@ static void __CheckPreprocessor(const Source *src, const char *guard,
             p++;
         char keyword[16];
         size_t keyword_length = 0;
-        while (isalpha((unsigned char)*p) && keyword_length < sizeof(keyword) - 1)
+        while (isalpha((unsigned char)*p)
+               && keyword_length < sizeof(keyword) - 1)
             keyword[keyword_length++] = *p++;
         keyword[keyword_length] = '\0';
         char *condition = __Trim(p);
@@ -711,21 +708,23 @@ static void __CheckPreprocessor(const Source *src, const char *guard,
 
             const IfEntry *entry = &stack[--depth];
             char found[256];
-            int has_comment = __EndifComment(src->text + start, length, found,
-                                             sizeof(found));
+            int has_comment =
+                __EndifComment(src->text + start, length, found, sizeof(found));
             if (has_comment && strcmp(found, entry->name) == 0)
                 continue;
 
             if (!has_comment)
-                __AddFixable(list, l + 1,
-                      "#endif must be followed by a comment with the name "
-                      "\"%s\" (ex : #endif /* %s */) - #if of line %zu",
-                      entry->name, entry->name, entry->line);
+                __AddFixable(
+                    list, l + 1,
+                    "#endif must be followed by a comment with the name "
+                    "\"%s\" (ex : #endif /* %s */) - #if of line %zu",
+                    entry->name, entry->name, entry->line);
             else
-                __AddFixable(list, l + 1,
-                      "#endif comment is \"%s\", expected exactly \"%s\" - #if "
-                      "of line %zu",
-                      found, entry->name, entry->line);
+                __AddFixable(
+                    list, l + 1,
+                    "#endif comment is \"%s\", expected exactly \"%s\" - #if "
+                    "of line %zu",
+                    found, entry->name, entry->line);
 
             if (fix != NULL)
                 __FixEndif(fix, l, src->text + start, length, entry->name);
@@ -746,7 +745,6 @@ static void __CheckPreprocessor(const Source *src, const char *guard,
 }
 
 // Functions
-
 
 enum
 {
@@ -867,7 +865,8 @@ static int __Classify(const char *header, size_t length, size_t *name_offset,
     size_t name_start = name_end;
     while (name_start > start
            && (__IsIdentChar(header[name_start - 1])
-               || header[name_start - 1] == ':' || header[name_start - 1] == '~'))
+               || header[name_start - 1] == ':'
+               || header[name_start - 1] == '~'))
         name_start--;
 
     size_t name_length = name_end - name_start;
@@ -934,9 +933,9 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
             {
                 size_t name_offset = 0;
                 int args = 0;
-                brace.kind = __Classify(s + statement_start, i - statement_start,
-                                        &name_offset, brace.name,
-                                        sizeof(brace.name), &args);
+                brace.kind = __Classify(s + statement_start,
+                                        i - statement_start, &name_offset,
+                                        brace.name, sizeof(brace.name), &args);
                 if (brace.kind == BRACE_FUNCTION)
                 {
                     brace.head_line =
@@ -973,12 +972,13 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
                 {
                     int lines = __CountCodeLines(src, brace.open, i);
                     if (lines > TIDY_MAX_LINES)
-                        __Add(list, brace.head_line,
-                              "function \"%s\" has %d lines (max %d), from line "
-                              "%zu to line %zu",
-                              brace.name, lines, TIDY_MAX_LINES,
-                              __LineOf(src, brace.open) + 1,
-                              __LineOf(src, i) + 1);
+                        __Add(
+                            list, brace.head_line,
+                            "function \"%s\" has %d lines (max %d), from line "
+                            "%zu to line %zu",
+                            brace.name, lines, TIDY_MAX_LINES,
+                            __LineOf(src, brace.open) + 1,
+                            __LineOf(src, i) + 1);
                 }
             }
             statement_start = i + 1;
@@ -990,9 +990,7 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
     free(stack);
 }
 
-
 // One file, one folder
-
 
 // Path shown to the user : without the leading "./"
 static const char *__DisplayPath(const char *path)
@@ -1029,9 +1027,9 @@ static void __KeepProblem(const char *path, const Problem *problem)
 
 static int __HeaderGuard(const char *name, char *guard, size_t size)
 {
-    int is_header = __EndsWithOneOf(
-        name, HEADER_EXTENSIONS,
-        sizeof(HEADER_EXTENSIONS) / sizeof(HEADER_EXTENSIONS[0]));
+    int is_header = __EndsWithOneOf(name, HEADER_EXTENSIONS,
+                                    sizeof(HEADER_EXTENSIONS)
+                                        / sizeof(HEADER_EXTENSIONS[0]));
     if (is_header)
         __GuardName(name, guard, size);
     return is_header;
@@ -1145,8 +1143,7 @@ static void __AnalyzeFile(const char *path, const char *name)
     int loaded = __LoadSource(path, &src);
     if (loaded < 0)
     {
-        UiWarning("Impossible to read %s, not checked.",
-                  __DisplayPath(path));
+        UiWarning("Impossible to read %s, not checked.", __DisplayPath(path));
         return;
     }
     if (loaded > 0)

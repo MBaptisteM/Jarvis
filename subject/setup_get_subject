@@ -34,18 +34,93 @@ say()
     printf '\033[1;36m[Jarvis]\033[0m %s\n' "$*" >&2
 }
 
-# $1 = nixpkgs attribute (e.g. nodejs, chromium)
-install_with_nix()
+# --- Install methods -------------------------------------------------------
+# Every method (nix, apt) is tried : the one saved in the info file first, else
+# the one deduced from what is installed. When a method works while the expected
+# one did not, the environment was wrongly deduced : the working method is saved
+# in the info file ("install_method", same key as the C side) and is used first
+# from now on. JARVIS_INFO_FILE is exported by Jarvis.
+INSTALL_METHOD_KEY="install_method"
+
+saved_method()
 {
-    local package="$1"
-    if ! command -v nix >/dev/null 2>&1; then
-        echo "Nix is required to install $package. Install it with: nix profile add nixpkgs#$package" >&2
-        exit 1
+    [ -n "${JARVIS_INFO_FILE:-}" ] && [ -f "$JARVIS_INFO_FILE" ] || return 0
+    sed -n "s/^[[:space:]]*\"$INSTALL_METHOD_KEY\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+        "$JARVIS_INFO_FILE" | head -n 1
+}
+
+save_method()
+{
+    [ -n "${JARVIS_INFO_FILE:-}" ] || return 0
+    touch "$JARVIS_INFO_FILE" 2>/dev/null || return 0
+    if grep -q "^[[:space:]]*\"$INSTALL_METHOD_KEY\"" "$JARVIS_INFO_FILE"; then
+        sed -i "s|^[[:space:]]*\"$INSTALL_METHOD_KEY\".*|\"$INSTALL_METHOD_KEY\" : \"$1\",|" \
+            "$JARVIS_INFO_FILE"
+    else
+        printf '"%s" : "%s",\n' "$INSTALL_METHOD_KEY" "$1" >> "$JARVIS_INFO_FILE"
     fi
-    say "Installing '$package' with Nix (nix profile add nixpkgs#$package)..."
-    nix profile add "nixpkgs#$package" < /dev/null
-    export PATH="$NIX_PROFILE_PATH:$PATH"
-    say "'$package' installed."
+}
+
+# $1 = nixpkgs attribute. "nix profile add" only exists in recent Nix, older
+# versions use "nix profile install" : both are tried.
+try_nix()
+{
+    command -v nix >/dev/null 2>&1 || return 1
+    nix profile add "nixpkgs#$1" < /dev/null \
+        || nix profile install "nixpkgs#$1" < /dev/null
+}
+
+# $1 = nixpkgs attribute (unused), $2 = apt package(s)
+try_apt()
+{
+    command -v apt-get >/dev/null 2>&1 || return 1
+    local sudo=""
+    if [ "$(id -u)" -ne 0 ]; then
+        command -v sudo >/dev/null 2>&1 || return 1
+        sudo="sudo"
+    fi
+    # shellcheck disable=SC2086
+    $sudo apt-get install -y $2 \
+        || { $sudo apt-get update && $sudo apt-get install -y $2; }
+}
+
+# install_pkg <binary> <nixpkgs attribute> <apt package(s)>
+install_pkg()
+{
+    local binary="$1" nix_pkg="$2" apt_pkgs="$3"
+    command -v "$binary" >/dev/null 2>&1 && return 0
+
+    local saved expected other method
+    saved="$(saved_method)"
+    if [ "$saved" = nix ] || [ "$saved" = apt ]; then
+        expected="$saved"
+    elif command -v nix >/dev/null 2>&1; then
+        expected=nix
+    else
+        expected=apt
+    fi
+    if [ "$expected" = nix ]; then other=apt; else other=nix; fi
+
+    for method in "$expected" "$other"; do
+        say "Installing '$binary' with $method..."
+        if "try_$method" "$nix_pkg" "$apt_pkgs"; then
+            export PATH="$NIX_PROFILE_PATH:$PATH"
+            if command -v "$binary" >/dev/null 2>&1; then
+                if [ "$method" != "$expected" ] || [ -z "$saved" ]; then
+                    save_method "$method"
+                fi
+                if [ "$method" != "$expected" ]; then
+                    say "'$expected' did not work but '$method' did : the install method is now set to '$method'."
+                fi
+                say "'$binary' installed."
+                return 0
+            fi
+        fi
+        echo "Installing '$binary' with $method failed." >&2
+    done
+
+    echo "Impossible to install '$binary' (tried : nix, apt). Install it manually (ex : sudo apt install $apt_pkgs)." >&2
+    return 1
 }
 
 
@@ -53,14 +128,8 @@ if [ "$MODE" = "setup" ]; then
     say "Checking the dependencies (Node.js, playwright, Chromium)..."
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-    install_with_nix nodejs
-fi
-
-if ! command -v npm >/dev/null 2>&1; then
-    echo "npm is still unavailable after installing Node.js with Nix." >&2
-    exit 1
-fi
+# Node.js : the apt package "nodejs" does not always bring npm
+install_pkg npm nodejs "nodejs npm" || exit 1
 
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
@@ -79,7 +148,7 @@ if [ "$NEED_CHROMIUM" -eq 1 ]; then
         # NixOS : use the Chromium of Nix
         if ! command -v chromium >/dev/null 2>&1 \
             && ! command -v chromium-browser >/dev/null 2>&1; then
-            install_with_nix chromium
+            install_pkg chromium chromium chromium || exit 1
         fi
 
         if command -v chromium >/dev/null 2>&1; then
@@ -87,7 +156,7 @@ if [ "$NEED_CHROMIUM" -eq 1 ]; then
         elif command -v chromium-browser >/dev/null 2>&1; then
             export JARVIS_CHROMIUM_EXECUTABLE_PATH="$(command -v chromium-browser)"
         else
-            echo "Chromium was installed with Nix but is not available in PATH." >&2
+            echo "Chromium was installed but is not available in PATH." >&2
             exit 1
         fi
     else
@@ -111,3 +180,4 @@ if [ "$MODE" = "setup" ]; then
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH" "$FILE_NAME" "$OTHER_PATH"
+

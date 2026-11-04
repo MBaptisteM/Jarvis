@@ -1,8 +1,10 @@
 #include "TPs_handler.h"
 
+#include "install_handler.h"
+
 // Get the path to the main folder or create it
 // Example : ~/Jarvis/TPs/
-char *CreateTPsPath()
+char *CreateTPsPath(void)
 {
     if (mkdir(TPs_FOLDER_NAME, 0755) != 0 && !IsDirectory(TPs_FOLDER_NAME))
         errx(EXIT_FAILURE, "ERROR Impossible to create the folder : %s",
@@ -227,19 +229,13 @@ static void AddNixProfileToPath()
 void InstallGH()
 {
     AddNixProfileToPath();
-    // Check if gh exists
-    if (system("command -v gh > /dev/null 2>&1") == 0)
-        return;
 
-    if (system("command -v nix > /dev/null 2>&1") != 0)
+    // Every install method is tried (nix, apt) : if one that was not expected
+    // works, it is saved in the info file as the install method to use.
+    if (InstallPackage("gh", "gh", "gh") != 0)
         errx(EXIT_FAILURE,
-             "GitHub CLI is required; install it with: nix profile add "
-             "nixpkgs#gh");
-
-    __RunCommand("nix profile add nixpkgs#gh");
-    if (system("command -v gh > /dev/null 2>&1") != 0)
-        errx(EXIT_FAILURE,
-             "GitHub CLI was installed with Nix but is not available in PATH");
+             "GitHub CLI is required; install it manually (ex : sudo apt "
+             "install gh, or nix profile add nixpkgs#gh)");
 }
 
 // // Rename .git.backup to .git
@@ -283,7 +279,6 @@ static const char *HEAL_SUBMODULES_SCRIPT =
     "git rm --cached -q -f -- \"$p\"; "
     "fi; done; true";
 
-    
 // Every step reports its own problem and never stops the program : the caller
 // decides what to do with the result. "Pushed" is only announced when git
 // really sent commits to the remote (checked after the push).
@@ -678,13 +673,6 @@ int PushRepoStatus(char *repo_path, char *commit_name, char *tag)
     if (repo_path != NULL && chdir(repo_path) != 0)
     {
         UiError("Impossible to go in %s.", repo_path);
-        return JARVIS_PUSH_FAILED;
-    }
-
-    if (system("git rev-parse --git-dir > /dev/null 2>&1") != 0)
-    {
-        UiError("This folder is not a Git repository : %s",
-                repo_path != NULL ? repo_path : ".");
         return JARVIS_PUSH_FAILED;
     }
 

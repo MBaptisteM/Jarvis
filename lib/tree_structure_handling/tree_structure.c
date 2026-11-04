@@ -151,7 +151,6 @@ char *FindFileBFS(const char *file_to_find)
     return NULL;
 }
 
-
 // Does <parent>/<name>/.git exist ?
 static int __IsRepoNamed(const char *parent, const char *name)
 {

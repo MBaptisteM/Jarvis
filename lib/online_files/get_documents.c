@@ -192,15 +192,29 @@ static int __RunWithSpinner(const char *label, const char *cmd)
     return code;
 }
 
-// Install (visibly) what setup_get_subject needs : Node.js, playwright, Chromium.
-// Done once, in the foreground, before any background download starts : the
-// parallel children do not install the same packages at the same time.
-// A spinner and the last line of the installation output are displayed, so the
+// The install helper of setup_get_subject saves the install method that works
+// in the info file : it needs to know where it is.
+char *GetInfoPath();
+
+static void __ExportInfoPath(void)
+{
+    char *info_path = GetInfoPath();
+    if (info_path == NULL)
+        return;
+    setenv("JARVIS_INFO_FILE", info_path, 1);
+    free(info_path);
+}
+
+// Install (visibly) what setup_get_subject needs : Node.js, playwright,
+// Chromium. Done once, in the foreground, before any background download starts
+// : the parallel children do not install the same packages at the same time. A
+// spinner and the last line of the installation output are displayed, so the
 // first run does not look frozen.
 // EXIT_SUCCESS if everything is ready.
 int EnsureDependencies(void)
 {
     const char *subject_path = GetSubjectFolderPath();
+    __ExportInfoPath();
 
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "\"%s/setup_get_subject\" setup \"%s\" \"%s\"",
@@ -239,8 +253,9 @@ int DowloadPage(char *url, char *file_name)
 
     // If not already Auth
     if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
-        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
-                           "and sign in to the forge.");
+        errx(EXIT_FAILURE,
+             "ERROR You are not authenticated. Run 'jarvis auth' "
+             "and sign in to the forge.");
 
     char cmd_subject[1024];
     snprintf(cmd_subject, sizeof(cmd_subject),
@@ -279,8 +294,9 @@ int GetSubject(char *repo_name)
 
     // If not already Auth
     if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
-        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
-                           "and sign in to the forge.");
+        errx(EXIT_FAILURE,
+             "ERROR You are not authenticated. Run 'jarvis auth' "
+             "and sign in to the forge.");
 
     // Get subject
     char cmd_subject[1024];
@@ -317,8 +333,9 @@ int GetGivenFiles(char *repo_name)
 
     // If not already Auth
     if (access(auth_path, F_OK) != 0 && Auth() != EXIT_SUCCESS)
-        errx(EXIT_FAILURE, "ERROR You are not authenticated. Run 'jarvis auth' "
-                           "and sign in to the forge.");
+        errx(EXIT_FAILURE,
+             "ERROR You are not authenticated. Run 'jarvis auth' "
+             "and sign in to the forge.");
 
     // Get given files
     char cmd_given_files[1024];
@@ -453,6 +470,8 @@ static int __ReadAuthLine(const char *prompt, char *buffer, size_t size,
 // Browser : the window is opened by the script, the user signs in and closes it
 static int __AuthBrowser(const char *subject_path, const char *auth_path)
 {
+    __ExportInfoPath();
+
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "%s/./setup_get_subject auth %s %s",
              subject_path, URL, subject_path);
@@ -519,6 +538,7 @@ static int __RunAuthConsole(const char *subject_path, const char *username,
 {
     char script[1024];
     snprintf(script, sizeof(script), "%s/setup_get_subject", subject_path);
+    __ExportInfoPath();
 
     int fds[2];
     if (pipe(fds) != 0)

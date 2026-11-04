@@ -1,6 +1,5 @@
 #include "clone.h"
 
-
 // Strictly parse the course id of an EPITA repository url.
 static int __ParseCourseId(const char *url, int *bimester, char *stubborn,
                            size_t stubborn_size)
@@ -78,8 +77,6 @@ int main(int argc, char *argv[])
         if (EnsureDependencies() != EXIT_SUCCESS)
             return EXIT_FAILURE;
 
-        UiInfo("Looking for your current repositories on the forge...");
-        fflush(stdout);
         current_repo_url = GetCurrentRepo();
         if (current_repo_url == NULL)
         {
@@ -95,10 +92,15 @@ int main(int argc, char *argv[])
         UiWarning("This string is not an epita repository.\n"
                   "Classic clone.");
 
-        size_t command_size = strlen(argv[1]) + SIZE_OF_STRING;
+        // "git submodule add" only works inside a git repository : anywhere
+        // else (its error is hidden) a plain "git clone" is done, whose own
+        // error is displayed if the url is not a repository either
+        size_t command_size = 2 * strlen(argv[1]) + SIZE_OF_STRING;
         char command_clone[command_size];
         snprintf(command_clone, command_size,
-                 "git submodule add --force \"%s\"", argv[1]);
+                 "git submodule add --force \"%s\" 2>/dev/null"
+                 " || git clone \"%s\"",
+                 argv[1], argv[1]);
 
         if (system(command_clone))
             errx(EXIT_FAILURE, "ERROR Impossible to clone the repository");

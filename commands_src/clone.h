@@ -14,6 +14,7 @@
 #include "TPs_handler.h"
 #include "choice.h"
 #include "clone_root.h"
+#include "counter.h"
 #include "current_handling.h"
 #include "custom.h"
 #include "get_documents.h"
@@ -23,7 +24,6 @@
 #include "subject_handling.h"
 #include "tree_structure.h"
 #include "ui.h"
-#include "counter.h"
 
 #define SEMESTER "S"
 #define BIMESTER "B"

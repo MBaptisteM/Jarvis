@@ -217,7 +217,8 @@ static const Command COMMANDS[] = {
           "default values if missing), so once pushed and pulled every Jarvis "
           "of a project shares them. Quitting applies the changes to the "
           "repositories already cloned (they are moved); Save also pushes the "
-          "root repository. The Format and Tidy settings are saved at once, Save "
+          "root repository. The Format and Tidy settings are saved at once, "
+          "Save "
           "pushes them.",
       .rows_title = "Menu",
       .rows = { { "Layers",
@@ -281,7 +282,8 @@ static const Command COMMANDS[] = {
       .details =
           "Scans every C / C++ file (.c .h .cc .cpp .cxx .hh .hpp .hxx) of the "
           "current folder (or of the given folder) and all its sub-folders, "
-          "and lists every problem as <file>:<line>: <problem> in an Info panel. "
+          "and lists every problem as <file>:<line>: <problem> in an Info "
+          "panel. "
           "Nothing is "
           "modified without your answer : when problems that can be fixed are "
           "found (include guard names, #endif comments, final newline), Jarvis "
@@ -429,7 +431,6 @@ static const Command *__Find(const char *name)
     }
     return NULL;
 }
-
 
 // Panels : ╭─ Title ────╮ / │ name   text │ / ╰────╯
 

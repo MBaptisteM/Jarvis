@@ -1,22 +1,21 @@
 #pragma once
 
 #include <err.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <semaphore.h>
 
 #include "TPs_handler.h"
+#include "counter.h"
+#include "current_handling.h"
 #include "info_file.h"
 #include "ui.h"
-#include "current_handling.h"
-#include "counter.h"
-
 
 // Parallel pull of the submodules : one thread per top-level submodule
 #define PULL_DEFAULT_JOBS 8
@@ -66,8 +65,8 @@ static size_t pull_total = 0;
 static size_t pull_done = 0;
 static size_t pull_problems = 0;
 static size_t pull_running = 0;
-static int pull_tty = 0;            // live progress line only on a terminal
-static const char *pull_last = "";  // last submodule finished
+static int pull_tty = 0; // live progress line only on a terminal
+static const char *pull_last = ""; // last submodule finished
 
 int main(int argc, char *argv[]);
 int ReadRootPath(char **value);

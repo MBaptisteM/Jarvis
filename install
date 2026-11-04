@@ -92,15 +92,42 @@ if ! command -v git >/dev/null 2>&1; then
     missing_packages+=("nixpkgs#git")
 fi
 
-if ((${#missing_packages[@]})); then
-    if ! command -v nix >/dev/null 2>&1; then
-        ui_panel error "Missing build tools" \
-            "Install Nix or provide make, cc, and git in PATH."
-        exit 1
+# "nix profile add" only exists in recent Nix, older ones use "install"
+nix_install() {
+    nix profile add "$@" >/dev/null 2>&1 || nix profile install "$@" >/dev/null
+}
+
+# nixpkgs#gnumake -> make, nixpkgs#gcc -> gcc, nixpkgs#git -> git
+apt_install() {
+    local apt_packages=() package
+    for package in "$@"; do
+        package=${package#nixpkgs#}
+        [ "$package" = gnumake ] && package=make
+        apt_packages+=("$package")
+    done
+    command -v apt-get >/dev/null 2>&1 || return 1
+    if [ "$(id -u)" -eq 0 ]; then
+        apt-get install -y "${apt_packages[@]}" >/dev/null
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo apt-get install -y "${apt_packages[@]}" >/dev/null
+    else
+        return 1
     fi
-    if ! nix profile add "${missing_packages[@]}" >/dev/null; then
+}
+
+if ((${#missing_packages[@]})); then
+    # Every install method is tried : the one that is not expected can work
+    # when the environment is not the one that was deduced
+    installed=0
+    if command -v nix >/dev/null 2>&1 && nix_install "${missing_packages[@]}"; then
+        installed=1
+    elif apt_install "${missing_packages[@]}"; then
+        installed=1
+    fi
+    if [ "$installed" -ne 1 ]; then
         ui_panel error "Installation failed" \
-            "Could not install the required build tools with Nix."
+            "Could not install the required build tools with Nix or apt." \
+            "Install make, cc (gcc) and git manually, then run the installer again."
         exit 1
     fi
     export PATH="$NIX_PROFILE_PATH:$PATH"
@@ -295,3 +322,4 @@ ui_panel success "Installation complete" \
     "Data directory: $JARVIS_DATA_PATH" \
     "Added ~/.local/bin to PATH and enabled shell navigation in $startup_file; this takes effect in new shells." \
     "$shortcut_status"
+

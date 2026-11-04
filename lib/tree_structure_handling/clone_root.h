@@ -1,8 +1,8 @@
 #ifndef CLONE_ROOT_H
 #define CLONE_ROOT_H
 
-#include "ui.h"
 #include "info_file.h"
+#include "ui.h"
 
 #define SIZE_OF_STRING 512
 #define ROOT_SEARCH_DEPTH 3

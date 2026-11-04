@@ -1,19 +1,19 @@
 #pragma once
 
+#include <ctype.h>
 #include <err.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <get_jarvis_paths.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <ctype.h>
 
 #include "choice.h"
 #include "ui.h"

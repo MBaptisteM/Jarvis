@@ -36,13 +36,14 @@ void CounterAsk(void)
     if (__CounterAlreadyAsked() || !__CounterGithubConnected())
         return;
 
-    UiQuestion("You are connected to GitHub.\n"
-               "Do you accept to be counted as a user of Jarvis ? The number "
-               "of users is public on " COUNTER_REPO
-               "\nIt helps a lot the staff of Jarvis.\n"
-               "This question is asked only once and won't affect Jarvis' behaviour.\n"
-               "You can use the command 'jarvis help counter' for more "
-               "information on how the counter works.");
+    UiQuestion(
+        "You are connected to GitHub.\n"
+        "Do you accept to be counted as a user of Jarvis ? The number "
+        "of users is public on " COUNTER_REPO
+        "\nIt helps a lot the staff of Jarvis.\n"
+        "This question is asked only once and won't affect Jarvis' behaviour.\n"
+        "You can use the command 'jarvis help counter' for more "
+        "information on how the counter works.");
 
     // "No" first : pressing enter without thinking never counts anybody
     const char *options[] = { "Yes, count me", "No, thanks" };

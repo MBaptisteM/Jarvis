@@ -5,8 +5,6 @@
 #    define _GNU_SOURCE
 #endif
 
-#include "tidy_handler.h"
-
 #include <ctype.h>
 #include <err.h>
 #include <ftw.h>
@@ -17,6 +15,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 
+#include "tidy_handler.h"
 #include "ui.h"
 
 #define TIDY_MAX_ARGS 4
