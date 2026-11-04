@@ -128,8 +128,136 @@ if [ "$MODE" = "setup" ]; then
     say "Checking the dependencies (Node.js, playwright, Chromium)..."
 fi
 
-# Node.js : the apt package "nodejs" does not always bring npm
-install_pkg npm nodejs "nodejs npm" || exit 1
+# --- Node.js ---------------------------------------------------------------
+# Playwright needs a recent Node.js, while the one of the system (apt) is often
+# too old. When it is missing or too old, a private copy is installed for
+# Jarvis only (nothing global is touched, no sudo) and put first in the PATH.
+NODE_MIN_MAJOR=20
+NODE_INSTALL_MAJOR=22
+
+if [ -n "${JARVIS_INFO_FILE:-}" ]; then
+    NODE_DIR="$(dirname "$JARVIS_INFO_FILE")/node"
+else
+    NODE_DIR="$HOME/.local/share/jarvis/node"
+fi
+
+# Major version of the node found in the PATH (0 when there is none)
+node_major()
+{
+    local version
+    version="$(node --version 2>/dev/null || true)"
+    version="${version#v}"
+    case "${version%%.*}" in
+        '' | *[!0-9]*) echo 0 ;;
+        *) echo "${version%%.*}" ;;
+    esac
+}
+
+node_ok()
+{
+    command -v npm >/dev/null 2>&1 && [ "$(node_major)" -ge "$NODE_MIN_MAJOR" ]
+}
+
+# Download the official Node.js build in $NODE_DIR (checksum verified)
+install_node_tarball()
+{
+    local arch base file tmp
+    case "$(uname -m)" in
+        x86_64 | amd64) arch=x64 ;;
+        aarch64 | arm64) arch=arm64 ;;
+        *) echo "Unsupported architecture for Node.js : $(uname -m)" >&2; return 1 ;;
+    esac
+    command -v tar >/dev/null 2>&1 || { echo "'tar' is required." >&2; return 1; }
+
+    fetch()
+    {
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$1"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -qO- "$1"
+        else
+            echo "'curl' or 'wget' is required to download Node.js." >&2
+            return 1
+        fi
+    }
+
+    base="https://nodejs.org/dist/latest-v${NODE_INSTALL_MAJOR}.x"
+    file="$(fetch "$base/SHASUMS256.txt" \
+        | sed -n "s/^[0-9a-f]*  \(node-v[0-9.]*-linux-$arch\.tar\.xz\)\$/\1/p" \
+        | head -n 1)" || true
+    if [ -z "$file" ]; then
+        echo "Impossible to find the Node.js ${NODE_INSTALL_MAJOR} download." >&2
+        return 1
+    fi
+
+    tmp="$(mktemp -d)"
+    say "Downloading Node.js ($file)..."
+    if ! fetch "$base/$file" > "$tmp/$file"; then
+        rm -rf "$tmp"
+        return 1
+    fi
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        local expected actual
+        expected="$(fetch "$base/SHASUMS256.txt" | sed -n "s/^\([0-9a-f]*\)  $file\$/\1/p")"
+        actual="$(sha256sum "$tmp/$file" | cut -d ' ' -f 1)"
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            echo "Node.js download corrupted (bad checksum)." >&2
+            rm -rf "$tmp"
+            return 1
+        fi
+    fi
+
+    rm -rf "$NODE_DIR"
+    mkdir -p "$NODE_DIR"
+    if ! tar -xJf "$tmp/$file" -C "$NODE_DIR" --strip-components=1; then
+        echo "Impossible to extract Node.js (is 'xz' installed ?)." >&2
+        rm -rf "$tmp" "$NODE_DIR"
+        return 1
+    fi
+    rm -rf "$tmp"
+}
+
+ensure_node()
+{
+    node_ok && return 0
+
+    # Private copy of a previous run
+    if [ -x "$NODE_DIR/bin/node" ]; then
+        export PATH="$NODE_DIR/bin:$PATH"
+        node_ok && return 0
+    fi
+
+    if [ "$(node_major)" -gt 0 ]; then
+        say "Node.js $(node --version) is too old (Playwright needs v${NODE_MIN_MAJOR} or higher) : installing a recent one for Jarvis..."
+    else
+        say "Node.js not found : installing it for Jarvis..."
+    fi
+
+    # NixOS : the downloaded binaries cannot run, use the Nix package
+    if [ -e /etc/NIXOS ] || grep -qi '^ID=nixos$' /etc/os-release 2>/dev/null; then
+        if command -v nix >/dev/null 2>&1; then
+            nix profile add "nixpkgs#nodejs_${NODE_INSTALL_MAJOR}" < /dev/null \
+                || nix profile install "nixpkgs#nodejs_${NODE_INSTALL_MAJOR}" < /dev/null \
+                || true
+            export PATH="$NIX_PROFILE_PATH:$PATH"
+        fi
+    elif install_node_tarball; then
+        export PATH="$NODE_DIR/bin:$PATH"
+    fi
+
+    # Last resort : the package manager (may be too old, checked below)
+    node_ok || install_pkg npm nodejs "nodejs npm" || true
+
+    if ! node_ok; then
+        echo "Node.js ${NODE_MIN_MAJOR}+ is required but could not be installed (found : $(node --version 2>/dev/null || echo none))." >&2
+        echo "Install it manually (https://nodejs.org) and try again." >&2
+        return 1
+    fi
+    say "Node.js $(node --version) ready."
+}
+
+ensure_node || exit 1
 
 
 if [ ! -f "$SUBJECT_PATH/package.json" ]; then
@@ -180,4 +308,5 @@ if [ "$MODE" = "setup" ]; then
 fi
 
 node "$SUBJECT_PATH/get_subject.js" "$MODE" "$URL" "$SUBJECT_PATH" "$FILE_NAME" "$OTHER_PATH"
+
 
