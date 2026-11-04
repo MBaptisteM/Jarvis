@@ -112,17 +112,77 @@ char *__PromptForRepoUrl(void)
     return repo_url;
 }
 
+static int __ShellOk(const char *command)
+{
+    return system(command) == 0;
+}
+
+// Make sure the GitHub CLI ("gh") is available, installing it when it is
+// missing (Nix, else apt). 1 when it can be used.
+static int __EnsureGithubCli(void)
+{
+    // Where Nix puts the installed programs, not always in the PATH yet
+    const char *home = getenv("HOME");
+    const char *path = getenv("PATH");
+    if (home != NULL)
+    {
+        size_t size = 2 * strlen(home) + (path ? strlen(path) : 0) + 128;
+        char *new_path = malloc(size);
+        if (new_path == NULL)
+            err(EXIT_FAILURE, "malloc");
+        snprintf(new_path, size,
+                 "%s/.nix-profile/bin:%s/.local/state/nix/profiles/profile/"
+                 "bin:%s",
+                 home, home, path ? path : "");
+        setenv("PATH", new_path, 1);
+        free(new_path);
+    }
+
+    if (__ShellOk("command -v gh >/dev/null 2>&1"))
+        return 1;
+
+    UiInfo("Installing the GitHub CLI (gh)...");
+    fflush(stdout);
+    __ShellOk(
+        "{ command -v nix >/dev/null 2>&1 && "
+        "{ nix profile add nixpkgs#gh </dev/null "
+        "|| nix profile install nixpkgs#gh </dev/null; }; } >/dev/null 2>&1 "
+        "|| { S=''; [ \"$(id -u)\" -ne 0 ] && S=sudo; "
+        "command -v apt-get >/dev/null 2>&1 && "
+        "{ $S apt-get install -y gh || { $S apt-get update && "
+        "$S apt-get install -y gh; }; }; }");
+
+    return __ShellOk("command -v gh >/dev/null 2>&1");
+}
+
+// Make sure gh is signed in to GitHub (asks to sign in otherwise), and that git
+// can push with this account. 1 when it is ready.
+static int __EnsureGithubLogin(void)
+{
+    if (!__ShellOk("gh auth status >/dev/null 2>&1"))
+    {
+        UiInfo("Signing in to GitHub (follow the instructions below)...");
+        fflush(stdout);
+        if (!__ShellOk("gh auth login --hostname github.com --git-protocol "
+                       "https --web")
+            || !__ShellOk("gh auth status >/dev/null 2>&1"))
+            return 0;
+    }
+
+    return __ShellOk("gh auth setup-git >/dev/null 2>&1");
+}
+
 // Create the root repository when it exists nowhere (neither locally nor on
-// the connected GitHub account) : a git repository REPO_NAME is initialised in
-// the current folder, and linked to a new private GitHub repository when the
-// GitHub CLI ("gh") is installed and signed in. Without it, the repository
-// stays local and the remote can be added later.
+// the connected GitHub account) : the folder REPO_NAME is created in the
+// current folder, initialised as a git repository, then a private GitHub
+// repository is created and linked to it as "origin" (the GitHub CLI is
+// installed and signed in when needed).
 static void __CreateRootRepo(void)
 {
     UiInfo("No existing root repository found : creating %s...", REPO_NAME);
     fflush(stdout);
 
-    size_t command_size = 2 * strlen(REPO_NAME) + SIZE_OF_STRING;
+    size_t command_size = 3 * strlen(REPO_NAME) + SIZE_OF_STRING;
     char command[command_size];
 
     // "git init -b" does not exist in old versions of git
@@ -134,20 +194,28 @@ static void __CreateRootRepo(void)
         errx(EXIT_FAILURE, "ERROR Impossible to create the root repository %s",
              REPO_NAME);
 
+    // Create the GitHub repository and link it ; if a repository with this name
+    // already exists on the account, just link it
     snprintf(command, command_size,
-             "cd \"%s\" && command -v gh >/dev/null 2>&1 "
-             "&& gh auth status >/dev/null 2>&1 "
-             "&& gh repo create \"%s\" --private --source=. --remote=origin "
-             ">/dev/null 2>&1",
-             REPO_NAME, REPO_NAME);
-    if (system(command) == 0)
-        UiSuccess("Private GitHub repository %s created and linked.",
+             "cd \"%s\" && { "
+             "gh repo create \"%s\" --private --source=. --remote=origin "
+             ">/dev/null 2>&1 "
+             "|| { u=$(gh api user -q .login) && "
+             "git remote add origin \"https://github.com/$u/%s.git\"; }; }",
+             REPO_NAME, REPO_NAME, REPO_NAME);
+
+    if (__EnsureGithubCli() && __EnsureGithubLogin() && __ShellOk(command))
+    {
+        UiSuccess("Private GitHub repository %s created and linked to the "
+                  "local one.",
                   REPO_NAME);
-    else
-        UiWarning("%s was created locally only (GitHub CLI missing or not "
-                  "signed in).\nLink it later with : git -C %s remote add "
-                  "origin <url>",
-                  REPO_NAME, REPO_NAME);
+        return;
+    }
+
+    UiWarning("The git repository %s was created, but it could not be linked "
+              "to GitHub automatically.\n"
+              "Link it later with : git -C %s remote add origin <url>",
+              REPO_NAME, REPO_NAME);
 }
 
 // Clone (or reuse) the root EPITA-TPs repository, using the currently
