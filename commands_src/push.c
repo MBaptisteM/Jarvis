@@ -159,6 +159,37 @@ static int __PushDespiteTidy(void)
     return ChoiceMCQ(options, 2) == 1;
 }
 
+// Value given after the tag keyword, written "<keyword>", "<keyword>-",
+// "<keyword>-*" or "<keyword>-<value>" (the keyword is COMMAND_TAG without its
+// trailing '-', the case does not matter). NULL if "arg" is not the keyword.
+// The first three forms give an empty value (a tag with only an automatic id).
+static char *__KeywordValue(char *arg, const char *keyword)
+{
+    size_t length = strlen(keyword);
+    while (length > 0 && keyword[length - 1] == '-')
+        length--;
+    if (length == 0)
+        return NULL;
+
+    for (size_t i = 0; i < length; i++)
+        if (tolower((unsigned char)arg[i]) != tolower((unsigned char)keyword[i]))
+            return NULL;
+
+    char *rest = arg + length;
+    if (*rest == '\0')
+    {
+        // A folder named like the keyword is a path, not a tag
+        return access(arg, F_OK) == 0 ? NULL : rest;
+    }
+    if (*rest != '-')
+        return NULL; // another word starting with the keyword
+
+    rest++;
+    if (strcmp(rest, "*") == 0)
+        rest++; // wildcard : any id
+    return rest;
+}
+
 int main(int argc, char *argv[])
 {
     // Ask once if the user accepts to be counted (GitHub star)
@@ -222,17 +253,16 @@ int main(int argc, char *argv[])
         }
         else
         {
-            // Case tag
-            size_t i = 0;
-            while (COMMAND_TAG[i] != 0 && tolower(argv[k][i]) == COMMAND_TAG[i])
-                i++;
+            // Case tag : "tag", "tag-" and "tag-<name>" (or "tag-*")
+            char *tag_value = __KeywordValue(argv[k], COMMAND_TAG);
 
-            if (COMMAND_TAG[i] == 0)
-                tag = &(argv[k][i]);
+            if (tag_value != NULL)
+                tag = tag_value;
 
             else
             {
                 // Case name
+                size_t i = 0;
                 while (COMMAND_NAME[i] != 0
                        && tolower(argv[k][i]) == COMMAND_NAME[i])
                     i++;
@@ -408,6 +438,12 @@ void __GetNameCommit(char **name_commit, char *path)
 void __GetTagID(char **tag, char *path)
 {
     size_t tag_length = strlen(*tag);
+
+    // "clamp", "clamp-" and "clamp-*" are the same : the wildcard (any id) is
+    // dropped, and the separator before the id is added when missing
+    while (tag_length > 0 && (*tag)[tag_length - 1] == '*')
+        tag_length--;
+
     int needs_separator = tag_length > 0 && (*tag)[tag_length - 1] != '-';
     char *prefix = malloc(tag_length + (size_t)needs_separator + 1);
     if (prefix == NULL)
