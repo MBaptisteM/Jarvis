@@ -112,6 +112,44 @@ char *__PromptForRepoUrl(void)
     return repo_url;
 }
 
+// Create the root repository when it exists nowhere (neither locally nor on
+// the connected GitHub account) : a git repository REPO_NAME is initialised in
+// the current folder, and linked to a new private GitHub repository when the
+// GitHub CLI ("gh") is installed and signed in. Without it, the repository
+// stays local and the remote can be added later.
+static void __CreateRootRepo(void)
+{
+    UiInfo("No existing root repository found : creating %s...", REPO_NAME);
+    fflush(stdout);
+
+    size_t command_size = 2 * strlen(REPO_NAME) + SIZE_OF_STRING;
+    char command[command_size];
+
+    // "git init -b" does not exist in old versions of git
+    snprintf(command, command_size,
+             "mkdir -p \"%s\" && cd \"%s\" && "
+             "(git init -q -b main 2>/dev/null || git init -q)",
+             REPO_NAME, REPO_NAME);
+    if (system(command))
+        errx(EXIT_FAILURE, "ERROR Impossible to create the root repository %s",
+             REPO_NAME);
+
+    snprintf(command, command_size,
+             "cd \"%s\" && command -v gh >/dev/null 2>&1 "
+             "&& gh auth status >/dev/null 2>&1 "
+             "&& gh repo create \"%s\" --private --source=. --remote=origin "
+             ">/dev/null 2>&1",
+             REPO_NAME, REPO_NAME);
+    if (system(command) == 0)
+        UiSuccess("Private GitHub repository %s created and linked.",
+                  REPO_NAME);
+    else
+        UiWarning("%s was created locally only (GitHub CLI missing or not "
+                  "signed in).\nLink it later with : git -C %s remote add "
+                  "origin <url>",
+                  REPO_NAME, REPO_NAME);
+}
+
 // Clone (or reuse) the root EPITA-TPs repository, using the currently
 // connected git/GitHub account by default. This is what "jarvis clone"
 // (no argument), "jarvis clone all" and "jarvis auth" trigger.
@@ -155,8 +193,8 @@ void __CloneParentRepo(void)
         free(repo_path);
     }
 
-    // Really not found anywhere : clone it, assuming it lives under
-    // REPO_NAME on the currently active git account
+    // Really not found anywhere : clone it if it lives under REPO_NAME on the
+    // currently active git account, else create it (never ask for an url)
     char *username = __GetGithubUsername();
     char *url = NULL;
 
@@ -175,30 +213,33 @@ void __CloneParentRepo(void)
 
         if (!__RemoteRepoExists(url))
         {
-            UiWarning("Impossible to find %s at %s.", REPO_NAME, url);
             free(url);
-            url = __PromptForRepoUrl();
+            url = NULL;
         }
+    }
+
+    int created = url == NULL;
+    if (created)
+    {
+        __CreateRootRepo();
     }
     else
     {
-        url = __PromptForRepoUrl();
+        UiInfo("Cloning the root repository:\n%s", url);
+
+        size_t command_size = strlen(url) + strlen(REPO_NAME) + SIZE_OF_STRING;
+        char command[command_size];
+        snprintf(command, command_size,
+                 "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone "
+                 "--recursive --jobs %u \"%s\" %s",
+                 __CloneJobs(), url, REPO_NAME);
+
+        if (system(command))
+            errx(EXIT_FAILURE,
+                 "ERROR Impossible to clone the root repository %s", url);
+
+        free(url);
     }
-
-    UiInfo("Cloning the root repository:\n%s", url);
-
-    size_t command_size = strlen(url) + strlen(REPO_NAME) + SIZE_OF_STRING;
-    char command[command_size];
-    snprintf(command, command_size,
-             "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone "
-             "--recursive --jobs %u \"%s\" %s",
-             __CloneJobs(), url, REPO_NAME);
-
-    if (system(command))
-        errx(EXIT_FAILURE, "ERROR Impossible to clone the root repository %s",
-             url);
-
-    free(url);
 
     char *cwd = getcwd(NULL, 0);
     if (cwd == NULL)
@@ -212,7 +253,8 @@ void __CloneParentRepo(void)
     WriteInfo("main_path", full_path);
     WriteInfo("current", full_path);
 
-    UiSuccess("Root repository cloned at:\n%s", full_path);
+    UiSuccess("Root repository %s at:\n%s", created ? "created" : "cloned",
+              full_path);
 
     free(full_path);
 }
