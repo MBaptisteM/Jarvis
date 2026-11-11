@@ -1194,14 +1194,6 @@ static void __CheckTokens(const Source *src, ProblemList *list)
 
 // Preprocessor : #include and #define
 
-typedef struct
-{
-    int seen;
-    int rank; // 0 : header of the file | 1 : system | 2 : local
-    size_t line;
-    char target[256];
-} LastInclude;
-
 // Keyword and arguments of the preprocessor directive of a line (copy of the
 // text of the file in "buffer")
 static char *__Directive(const Source *src, size_t l, char *buffer, size_t size,
@@ -1229,11 +1221,8 @@ static char *__Directive(const Source *src, size_t l, char *buffer, size_t size,
     return __Trim(p);
 }
 
-// cpp.include.filetype and cpp.include.order : the header of the file, then the
-// system headers, then the local ones, in blocks separated by an empty line and
-// sorted alphabetically
-static void __CheckInclude(const char *rest, size_t line, const char *own,
-                           LastInclude *last, ProblemList *list)
+// cpp.include.filetype : only headers are included
+static void __CheckInclude(const char *rest, size_t line, ProblemList *list)
 {
     char close = rest[0] == '<' ? '>' : rest[0] == '"' ? '"' : '\0';
     const char *end = close == '\0' ? NULL : strchr(rest + 1, close);
@@ -1247,28 +1236,6 @@ static void __CheckInclude(const char *rest, size_t line, const char *own,
     size_t extensions = sizeof(INCLUDE_EXTENSIONS) / sizeof(char *);
     if (!__EndsWithOneOf(target, INCLUDE_EXTENSIONS, extensions))
         __Add(list, line, "included file \"%s\" must be a header (.h)", target);
-
-    const char *base = strrchr(target, '/');
-    base = base != NULL ? base + 1 : target;
-    int rank = close == '>' ? 1 : (own != NULL && strcmp(base, own) == 0 ? 0 : 2);
-
-    if (last->seen && rank < last->rank)
-        __Add(list, line,
-              "include order : header of the file, system headers, then local "
-              "headers (\"%s\" is misplaced)",
-              target);
-    else if (last->seen && rank > last->rank && line == last->line + 1)
-        __Add(list, line, "include blocks must be separated by an empty line");
-    else if (last->seen && rank == last->rank && line == last->line + 1
-             && strcasecmp(target, last->target) < 0)
-        __Add(list, line,
-              "includes must be sorted alphabetically (\"%s\" before \"%s\")",
-              target, last->target);
-
-    last->seen = 1;
-    last->rank = rank;
-    last->line = line;
-    snprintf(last->target, sizeof(last->target), "%s", target);
 }
 
 // name.case.macro : macro arguments are in title case (Left, Right)
@@ -1317,18 +1284,8 @@ static void __CheckMacro(char *rest, size_t line, ProblemList *list)
         __CheckMacroArgument(token, line, list);
 }
 
-static void __CheckDirectives(const Source *src, const char *name,
-                              ProblemList *list)
+static void __CheckDirectives(const Source *src, ProblemList *list)
 {
-    char own[300] = "";
-    const char *own_header = NULL;
-    if (__EndsWithOneOf(name, (const char *[]){ ".c" }, 1))
-    {
-        snprintf(own, sizeof(own), "%.*s.h", (int)(strlen(name) - 2), name);
-        own_header = own;
-    }
-
-    LastInclude last = { 0, 0, 0, "" };
     for (size_t l = 0; l < src->line_count; l++)
     {
         if (src->preproc[l] != 1)
@@ -1338,7 +1295,7 @@ static void __CheckDirectives(const Source *src, const char *name,
         char keyword[16];
         char *rest = __Directive(src, l, buffer, sizeof(buffer), keyword);
         if (strcmp(keyword, "include") == 0)
-            __CheckInclude(rest, l + 1, own_header, &last, list);
+            __CheckInclude(rest, l + 1, list);
         else if (strcmp(keyword, "define") == 0)
             __CheckMacro(rest, l + 1, list);
     }
@@ -1521,15 +1478,10 @@ static void __CheckTopStatement(CStyle *ctx, const Source *src, size_t start,
     free(text);
 }
 
-// fun.proto.void, name.case, export.fun : head of a function definition
+// fun.proto.void, export.fun : head of a function definition
 static void __CheckFunctionHead(CStyle *ctx, const char *head, size_t length,
                                 size_t name_offset, const Brace *brace)
 {
-    if (strchr(brace->name, ':') == NULL && strcmp(brace->name, "?") != 0
-        && !__IsLowerName(brace->name))
-        __Add(ctx->list, brace->head_line,
-              "function name \"%s\" must match [a-z][a-z0-9_]*", brace->name);
-
     const char *paren = memchr(head + name_offset, '(', length - name_offset);
     if (paren != NULL)
     {
@@ -1554,7 +1506,7 @@ static void __CheckFunctionHead(CStyle *ctx, const char *head, size_t length,
 static void __CheckCStyle(const Source *src, const char *name, CStyle *ctx)
 {
     __CheckFileName(name, ctx->list);
-    __CheckDirectives(src, name, ctx->list);
+    __CheckDirectives(src, ctx->list);
     __CheckDigraphs(src, ctx->list);
     __CheckTokens(src, ctx->list);
     __CheckCasts(src, ctx->list);
@@ -1629,9 +1581,10 @@ static void __CheckFunctions(const Source *src, ProblemList *list,
                     if (lines > TIDY_MAX_LINES)
                         __Add(
                             list, brace.head_line,
-                            "function \"%s\" has %d lines (max %d), from line "
-                            "%zu to line %zu",
-                            brace.name, lines, TIDY_MAX_LINES,
+                            UI_BOLD "%d lines" UI_NORMAL
+                            " (max %d) : function \"%s\", from line %zu to "
+                            "line %zu",
+                            lines, TIDY_MAX_LINES, brace.name,
                             __LineOf(src, brace.open) + 1,
                             __LineOf(src, i) + 1);
                 }
@@ -1666,23 +1619,92 @@ static const char *__DisplayPath(const char *path)
 
 // Every problem found, one line each (<file>:<line>: <problem>) : they are all
 // shown at the end in the same Info panel
+// The "<file>:<line>:" part is padded to the same width for all the problems, so
+// that the messages are aligned.
+typedef struct
+{
+    char *prefix;
+    char *message;
+} KeptProblem;
+
+static KeptProblem *kept = NULL;
+static size_t kept_count = 0;
+static size_t kept_capacity = 0;
+static size_t prefix_width = 0;
+
 static char *remaining = NULL;
 static size_t remaining_size = 0;
 
+static char *__Duplicate(const char *text)
+{
+    char *copy = strdup(text);
+    if (copy == NULL)
+        err(EXIT_FAILURE, "strdup");
+    return copy;
+}
+
 static void __KeepProblem(const char *path, const Problem *problem)
 {
-    int length = snprintf(NULL, 0, "%s:%zu: %s\n", path, problem->line,
-                          problem->message);
+    char prefix[1100];
+    int length = snprintf(prefix, sizeof(prefix), "%s:%zu:", path,
+                          problem->line);
     if (length < 0)
         return;
 
-    char *grown = realloc(remaining, remaining_size + (size_t)length + 1);
-    if (grown == NULL)
-        err(EXIT_FAILURE, "realloc");
-    remaining = grown;
-    snprintf(remaining + remaining_size, (size_t)length + 1, "%s:%zu: %s\n",
-             path, problem->line, problem->message);
-    remaining_size += (size_t)length;
+    if (kept_count == kept_capacity)
+    {
+        kept_capacity = kept_capacity == 0 ? 16 : kept_capacity * 2;
+        KeptProblem *grown = realloc(kept, kept_capacity * sizeof(KeptProblem));
+        if (grown == NULL)
+            err(EXIT_FAILURE, "realloc");
+        kept = grown;
+    }
+
+    kept[kept_count].prefix = __Duplicate(prefix);
+    kept[kept_count].message = __Duplicate(problem->message);
+    kept_count++;
+
+    size_t width = strlen(prefix);
+    if (width > prefix_width)
+        prefix_width = width;
+}
+
+static void __FreeKept(void)
+{
+    for (size_t i = 0; i < kept_count; i++)
+    {
+        free(kept[i].prefix);
+        free(kept[i].message);
+    }
+    free(kept);
+    kept = NULL;
+    kept_count = 0;
+    kept_capacity = 0;
+    prefix_width = 0;
+}
+
+// All the kept problems in one text, one line each, messages aligned
+static void __BuildRemaining(void)
+{
+    free(remaining);
+    remaining = NULL;
+    remaining_size = 0;
+
+    for (size_t i = 0; i < kept_count; i++)
+    {
+        int length = snprintf(NULL, 0, "%-*s %s\n", (int)prefix_width,
+                              kept[i].prefix, kept[i].message);
+        if (length < 0)
+            continue;
+
+        char *grown = realloc(remaining, remaining_size + (size_t)length + 1);
+        if (grown == NULL)
+            err(EXIT_FAILURE, "realloc");
+        remaining = grown;
+        snprintf(remaining + remaining_size, (size_t)length + 1, "%-*s %s\n",
+                 (int)prefix_width, kept[i].prefix, kept[i].message);
+        remaining_size += (size_t)length;
+    }
 }
 
 static int __HeaderGuard(const char *name, char *guard, size_t size)
@@ -1908,6 +1930,7 @@ static int __Run(const char *folder, int fix)
     files_fixed = 0;
     total_fixed = 0;
     fix_mode = fix;
+    __FreeKept();
     free(remaining);
     remaining = NULL;
     remaining_size = 0;
@@ -1930,6 +1953,7 @@ static int __Run(const char *folder, int fix)
                   files_fixed);
 
     // All the problems, in the same Info panel
+    __BuildRemaining();
     if (remaining != NULL)
     {
         if (remaining_size > 0 && remaining[remaining_size - 1] == '\n')

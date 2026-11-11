@@ -4,6 +4,26 @@
 static struct termios choice_raw;
 static int choice_raw_valid = 0;
 
+// Width of the terminal when the menu was last drawn (0 : unknown, the options
+// are then never cut)
+static int choice_columns = 0;
+
+// Returned by __ReadByte when the window was resized
+#define CHOICE_RESIZED 2
+
+// Has the window been resized since the last call ? The width is compared at
+// each tick, so it works wherever the OS can give the size of the terminal,
+// with no signal handler to interrupt the calls.
+static int __WindowResized(void)
+{
+    int now = UiTerminalColumns(stdout);
+    if (now == choice_columns)
+        return 0;
+
+    choice_columns = now;
+    return 1;
+}
+
 // Another process can put the terminal back in normal mode while a question is
 // displayed (a download that ends in the background, a git / ssh command...) :
 // the keys are then written on the screen (^[[A, ^[[B) instead of being read
@@ -20,13 +40,16 @@ static void __KeepRawMode(void)
 
 // Read one byte of stdin without ever staying blocked with a wrong terminal
 // state. timeout_ms < 0 : wait as long as needed.
-// 1 : a byte was read | 0 : timeout | -1 : end of input
+// 1 : a byte was read | 0 : timeout | -1 : end of input | CHOICE_RESIZED : the
+// window was resized (only when waiting without timeout)
 static int __ReadByte(unsigned char *c, int timeout_ms)
 {
     int waited = 0;
     while (1)
     {
         __KeepRawMode();
+        if (timeout_ms < 0 && __WindowResized())
+            return CHOICE_RESIZED;
 
         int tick = CHOICE_TICK_MS;
         if (timeout_ms >= 0 && timeout_ms - waited < tick)
@@ -79,13 +102,61 @@ static int __NextSelectable(const char *options[], int num_choices, int from,
     return from;
 }
 
+// An option is displayed on one terminal row : when the window is too narrow it
+// is cut and ends with an ellipsis, so that the cursor moves used to redraw the
+// menu stay right
+static void __PrintOption(const char *text)
+{
+    size_t length = strlen(text);
+    int cut = 0;
+
+    if (choice_columns > 0)
+    {
+        // "> " before the text, and the last column is kept free
+        int room = choice_columns > 11 ? choice_columns - 3 : 8;
+        size_t fit = UiFitBytes(text, room);
+        cut = fit < length;
+        length = cut ? UiFitBytes(text, room - 1) : length;
+    }
+
+    printf("%.*s%s", (int)length, text, cut ? "\xE2\x80\xA6" : "");
+}
+
+static void __DrawMenu(const char *options[], int num_choices, int choice)
+{
+    for (int i = 0; i < num_choices; i++)
+    {
+        if (!__Selectable(options, i))
+        {
+            printf("\n");
+            continue;
+        }
+
+        printf(i == choice ? "> \033[7m" : "  ");
+        __PrintOption(options[i]);
+        printf(i == choice ? "\033[0m\n" : "\n");
+    }
+    fflush(stdout);
+}
+
+// Back to the first row of the menu, and clear everything under it
+static void __EraseMenu(int num_choices)
+{
+    if (num_choices > 0)
+        printf("\033[%dA", num_choices);
+    printf("\033[J");
+    fflush(stdout);
+}
+
 // Let the user choose and option and return the index of the option
 // (-1 if the input is closed). Empty options ("") are blank separators that
-// cannot be selected, the index returned still counts them.
+// cannot be selected, the index returned still counts them. The menu is drawn
+// again when the window is resized.
 int ChoiceMCQ(const char *options[], int num_choices)
 {
     struct termios orig;
     __EnableRawMode(&orig);
+    choice_columns = UiTerminalColumns(stdout);
 
     int choice = 0;
     int closed = 0;
@@ -94,19 +165,16 @@ int ChoiceMCQ(const char *options[], int num_choices)
 
     while (1)
     {
-        for (int i = 0; i < num_choices; i++)
-        {
-            if (!__Selectable(options, i))
-                printf("\n");
-            else if (i == choice)
-                printf("> \033[7m%s\033[0m\n", options[i]);
-            else
-                printf("  %s\n", options[i]);
-        }
-        fflush(stdout);
+        __DrawMenu(options, num_choices, choice);
 
         unsigned char c;
-        if (__ReadByte(&c, -1) <= 0)
+        int key = __ReadByte(&c, -1);
+        if (key == CHOICE_RESIZED)
+        {
+            __EraseMenu(num_choices); // drawn again at the new width
+            continue;
+        }
+        if (key <= 0)
         {
             closed = 1;
             break;
@@ -132,29 +200,10 @@ int ChoiceMCQ(const char *options[], int num_choices)
             break;
         }
 
-        // Moove the cursor
-        printf("\033[%uA", num_choices);
-
-        for (int i = 0; i < num_choices; i++)
-        {
-            // Erase the line
-            printf("\033[2K");
-        }
+        __EraseMenu(num_choices);
     }
 
-    // Moove the cursor
-    printf("\033[%uA", num_choices);
-
-    for (int i = 0; i < num_choices; i++)
-    {
-        // Erase the line
-        printf("\033[2K\n");
-    }
-
-    // Moove the cursor
-    printf("\033[%uA", num_choices);
-    fflush(stdout);
-
+    __EraseMenu(num_choices);
     __DisableRawMode(&orig);
     return closed ? -1 : choice;
 }

@@ -43,6 +43,23 @@ int main(int argc, char *argv[])
         // "c" -> "clone", "g" -> "go", ...
         argv[1] = ResolveShortcut(argv[1]);
 
+        // "jarvis counter" alone -> "jarvis help counter"
+        if (argc == 2 && strcasecmp(argv[1], "counter") == 0)
+        {
+            char help_path[256];
+            snprintf(help_path, sizeof(help_path), "%s/%s", GetCommandPath(),
+                     COMMAND_HELP);
+
+            if (access(help_path, X_OK) != 0)
+                errx(EXIT_FAILURE,
+                     "ERROR you need to select a command and command %s "
+                     "not found",
+                     COMMAND_HELP);
+
+            char *help_args[] = { COMMAND_HELP, argv[1], NULL };
+            execvp(help_path, help_args);
+        }
+
         if (argc > 2)
         {
             if (strcasecmp(argv[2], "--help") == 0

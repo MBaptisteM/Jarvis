@@ -41,6 +41,7 @@
   * [Erase](#erase-command)
   * [Help](#help-command)
   * [Counter](#counter)
+  * [Update](#update-command)
   * [Uninstall](#uninstall-command)
   * [Shortcuts](#shortcuts)
 * [License](#license)
@@ -217,7 +218,7 @@ Format your code with `clang-format` in one command, or automatically before eve
 
 ## Code Style Check
 
-Check the style rules of your C / C++ code in one command, or automatically before every push.
+Check the C coding style rules that `clang-format` can't enforce, in one command, or automatically before every push.
 
 * `jarvis tidy [<path>]` scans every C / C++ file of the current folder (or of the given folder) and its sub-folders.
 * Every problem is listed as `<file>:<line>: <problem>`.
@@ -505,13 +506,30 @@ lines, comments and lines made of braces only are not counted.
 
 ### Checks
 
-| Check          | Rule                                                                                         |
-|----------------|----------------------------------------------------------------------------------------------|
-| Arguments      | At most 4 arguments per function.                                                            |
-| Length         | At most 30 lines per function.                                                               |
-| Newline        | Every file ends with a newline.                                                              |
-| `#endif`       | Followed by a comment with exactly the name of its `#if` (ex: `#endif /* DEBUG */`).         |
-| Header guard   | A header starts with `#ifndef <FILE NAME>_H` in upper case (`test.h`: `TEST_H`), followed by `#define` with the same name. |
+Only the rules `clang-format` can't enforce are checked here (use `jarvis format`
+for the layout: braces, indentation, spaces, commas...). Rules marked **C only**
+apply to `.c` and `.h` files, the others to every C / C++ file.
+
+| Check                  | Rule                                                                                       |
+|------------------------|--------------------------------------------------------------------------------------------|
+| Arguments              | At most 4 arguments per function.                                                          |
+| Length                 | At most 30 lines per function.                                                             |
+| Newline                | Every file ends with a newline.                                                            |
+| `#endif`               | Followed by a comment with exactly the name of its `#if` (ex: `#endif /* DEBUG */`).        |
+| Header guard           | A header starts with `#ifndef <FILE NAME>_H` in upper case (`test.h`: `TEST_H`), followed by `#define` with the same name. |
+| Casts (C only)         | No explicit cast.                                                                          |
+| Global variables (C only) | Names start with `g_`; at most 1 exported global variable per `.c` file.                |
+| Exported functions (C only) | At most 10 exported (non `static`) functions per `.c` file.                           |
+| Prototypes (C only)    | `(void)` when there is no argument; the prototype of an exported function is in a header, not in a `.c` file. |
+| Names (C only)         | File names match `[a-z][a-z0-9_]*`; macro names are in upper case and macro arguments in title case (`Left`). |
+| Includes (C only)      | Only headers are included; order: header of the file, system headers, local headers, in blocks separated by an empty line and sorted alphabetically. |
+| Keywords (C only)      | No `goto`, no `asm`, no gcc builtin (`__builtin_*`), no digraph / trigraph.                |
+| `typedef` (C only)     | Only for function pointers (structures and unions are not aliased).                        |
+| `enum` (C only)        | The last enumerator ends with a comma.                                                     |
+
+Only the include guard names, the `#endif` comments and the final newline can be
+fixed automatically. The other problems are reported, they need a choice of the
+author.
 
 What is done automatically before each `jarvis push` (nothing, warn or fix;
 nothing by default) is set in `jarvis custom` > **Tidy**.
@@ -687,6 +705,27 @@ yes, a star is added to the repository with your GitHub account.
 
 
 
+## Update Command
+
+Update Jarvis to the latest version.
+
+### Usage
+
+```bash
+jarvis update
+```
+
+### What happens
+
+The installer is downloaded and run again, exactly like the first installation
+(see [Installation](#installation)): Jarvis is rebuilt and reinstalled over the
+previous version. Your data (session, settings, root repository) is kept.
+If the download fails, nothing is changed.
+
+Shortcut: `jarvis u` (or `j u`).
+
+
+
 ## Uninstall Command
 
 Remove Jarvis from the system.
@@ -718,6 +757,7 @@ Are you sure you want to uninstall Jarvis? [y/N]
 | `tidy`      | `t`      |
 | `find`      | `f`      |
 | `go`        | `g`      |
+| `update`    | `u`      |
 | `help`      | `h`      |
 
 `erase`, `custom` and `uninstall` have no shortcut (`erase` and `uninstall` are

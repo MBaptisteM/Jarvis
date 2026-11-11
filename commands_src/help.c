@@ -203,7 +203,7 @@ static const Command COMMANDS[] = {
       .examples = { "jarvis go root", "jarvis go current",
                     "jarvis go \"trees\"", NULL } },
 
-    { .name = "custom, cu",
+    { .name = "custom",
       .shortcut = NULL,
       .group = "Organization",
       .usage = "jarvis custom",
@@ -320,7 +320,7 @@ static const Command COMMANDS[] = {
                   "(void) when there is no argument ; the prototype of an "
                   "exported function is in a header, not in a .c file." },
                 { "Names (C)",
-                  "File and function names match [a-z][a-z0-9_]* ; macro "
+                  "File names match [a-z][a-z0-9_]* ; macro "
                   "names are in upper case and macro arguments in title case "
                   "(Left)." },
                 { "Includes (C)",
@@ -387,7 +387,7 @@ static const Command COMMANDS[] = {
       .shortcut = NULL,
       .group = "Others",
       .usage = "jarvis help counter",
-      .summary = "How the Jarvis user counter works. [Warning] Type \'jarvis help counter\'",
+      .summary = "How the Jarvis user counter works.",
       .details =
           "Jarvis counts its users with the stars of its GitHub repository "
           "(MBaptisteM/Jarvis). The first time you use Jarvis in a terminal "
@@ -444,11 +444,7 @@ static void __InitStyle(FILE *stream)
 
 static int __Width(void)
 {
-    int width = 0;
-
-    struct winsize ws;
-    if (isatty(fileno(out)) && ioctl(fileno(out), TIOCGWINSZ, &ws) == 0)
-        width = ws.ws_col;
+    int width = UiTerminalColumns(out);
     if (width <= 0 && getenv("COLUMNS") != NULL)
         width = atoi(getenv("COLUMNS"));
     if (width <= 0)

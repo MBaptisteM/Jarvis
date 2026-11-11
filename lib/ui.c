@@ -51,12 +51,22 @@ static const char *__DefaultTitle(UiKind kind)
     }
 }
 
+int UiTerminalColumns(FILE *stream)
+{
+#ifdef TIOCGWINSZ
+    struct winsize ws;
+    if (isatty(fileno(stream)) && ioctl(fileno(stream), TIOCGWINSZ, &ws) == 0
+        && ws.ws_col > 0)
+        return ws.ws_col;
+#else
+    (void)stream;
+#endif
+    return 0;
+}
+
 static int __Width(FILE *stream)
 {
-    int width = 0;
-    struct winsize ws;
-    if (isatty(fileno(stream)) && ioctl(fileno(stream), TIOCGWINSZ, &ws) == 0)
-        width = ws.ws_col;
+    int width = UiTerminalColumns(stream);
     if (width <= 0 && getenv("COLUMNS") != NULL)
         width = atoi(getenv("COLUMNS"));
     if (width <= 0)
@@ -79,12 +89,26 @@ static size_t __CharLen(const char *p)
     return n;
 }
 
+size_t UiFitBytes(const char *text, int columns)
+{
+    size_t i = 0;
+    for (int cols = 0; text[i] != '\0' && cols < columns; cols++)
+        i += __CharLen(text + i);
+    return i;
+}
+
+// UI_BOLD / UI_NORMAL marks : they are not displayed
+static int __IsMark(char c)
+{
+    return c == UI_BOLD[0] || c == UI_NORMAL[0];
+}
+
 // Number of displayed characters in the first "bytes" bytes of p
 static int __Cols(const char *p, size_t bytes)
 {
     int cols = 0;
     for (size_t i = 0; i < bytes; i += __CharLen(p + i))
-        cols++;
+        cols += !__IsMark(p[i]);
     return cols;
 }
 
@@ -98,8 +122,8 @@ static size_t __Chunk(const char *p, int width)
     {
         if (p[i] == ' ' && i > 0 && p[i - 1] != ' ')
             last_space = i;
+        cols += !__IsMark(p[i]);
         i += __CharLen(p + i);
-        cols++;
     }
     if (p[i] == '\0' || p[i] == ' ')
         return i;
@@ -144,14 +168,40 @@ static const char *__StripPrefix(const char *message)
 // Set by UiPanelBold : the text of the rows is drawn in bold
 static int __bold_text = 0;
 
+// Write the text of a row : the marks UI_BOLD / UI_NORMAL become escape codes
+// (or nothing without colors). "bold" is kept from a row to the next one.
+static void __PutText(FILE *mem, const Style *style, const char *p, size_t n,
+                      int *bold)
+{
+    int colors = style->reset[0] != '\0';
+    if (*bold && colors)
+        fputs("\033[1m", mem);
+
+    for (size_t i = 0; i < n; i++)
+    {
+        if (p[i] == UI_BOLD[0] || p[i] == UI_NORMAL[0])
+        {
+            *bold = p[i] == UI_BOLD[0];
+            if (colors)
+                fputs(*bold ? "\033[1m" : "\033[22m", mem);
+        }
+        else
+            fputc(p[i], mem);
+    }
+
+    if (*bold && colors)
+        fputs("\033[22m", mem);
+}
+
 static void __Row(FILE *mem, const Style *style, int text_width, const char *p,
-                  size_t n)
+                  size_t n, int *bold)
 {
     int pad = text_width - __Cols(p, n);
     const char *text = __bold_text && style->reset[0] != '\0' ? "\033[1m" : "";
     const char *end = text[0] != '\0' ? style->reset : "";
-    fprintf(mem, "%s│%s %s%.*s%s%*s %s│%s\n", style->border, style->reset, text,
-            (int)n, p, end, pad, "", style->border, style->reset);
+    fprintf(mem, "%s│%s %s", style->border, style->reset, text);
+    __PutText(mem, style, p, n, bold);
+    fprintf(mem, "%s%*s %s│%s\n", end, pad, "", style->border, style->reset);
 }
 
 static void __Render(FILE *stream, UiKind kind, const char *title,
@@ -204,6 +254,7 @@ static void __Render(FILE *stream, UiKind kind, const char *title,
     fprintf(mem, "╮%s\n", style.reset);
 
     // Rows
+    int bold = 0;
     while (1)
     {
         char *newline = strchr(line, '\n');
@@ -212,11 +263,11 @@ static void __Render(FILE *stream, UiKind kind, const char *title,
 
         const char *p = line;
         if (*p == '\0')
-            __Row(mem, &style, text_width, "", 0);
+            __Row(mem, &style, text_width, "", 0, &bold);
         while (*p != '\0')
         {
             size_t n = __Chunk(p, text_width);
-            __Row(mem, &style, text_width, p, n);
+            __Row(mem, &style, text_width, p, n, &bold);
             p += n;
             while (*p == ' ')
                 p++;
