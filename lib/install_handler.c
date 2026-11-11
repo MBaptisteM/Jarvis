@@ -90,8 +90,7 @@ static void __RememberMethod(InstallMethod worked, InstallMethod expected,
                METHOD_NAMES[worked]);
 }
 
-int InstallPackage(const char *nix_pkg, const char *apt_pkg,
-                   const char *binary)
+int InstallPackage(const char *nix_pkg, const char *apt_pkg, const char *binary)
 {
     if (__Exists(binary))
         return 0;

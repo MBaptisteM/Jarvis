@@ -1,6 +1,6 @@
 #include "help.h"
 
-#define MAX_ROWS 8
+#define MAX_ROWS 24
 #define MAX_EXAMPLES 5
 
 typedef struct
@@ -203,7 +203,7 @@ static const Command COMMANDS[] = {
       .examples = { "jarvis go root", "jarvis go current",
                     "jarvis go \"trees\"", NULL } },
 
-    { .name = "custom",
+    { .name = "custom, cu",
       .shortcut = NULL,
       .group = "Organization",
       .usage = "jarvis custom",
@@ -283,14 +283,17 @@ static const Command COMMANDS[] = {
           "Scans every C / C++ file (.c .h .cc .cpp .cxx .hh .hpp .hxx) of the "
           "current folder (or of the given folder) and all its sub-folders, "
           "and lists every problem as <file>:<line>: <problem> in an Info "
-          "panel. "
+          "panel. Only the rules that clang-format can't enforce are checked "
+          "(use jarvis format for the layout : braces, indentation, "
+          "spaces...) ; the checks marked (C) only apply to .c and .h files. "
           "Nothing is "
           "modified without your answer : when problems that can be fixed are "
           "found (include guard names, #endif comments, final newline), Jarvis "
           "asks whether to fix them, and warns you about the others, that "
           "stay to fix by hand. With --fix they are fixed without asking "
           "(nothing is asked outside a terminal). A function with "
-          "too many lines or arguments is never modified. The exit code is "
+          "too many lines or arguments, or any other problem that needs a "
+          "choice of the author, is never modified. The exit code is "
           "not zero when a problem is left. .git "
           "and node_modules folders are skipped. Lines of a function : blank "
           "lines, comments and lines made of braces only are not counted. "
@@ -307,6 +310,30 @@ static const Command COMMANDS[] = {
                   "A header starts with #ifndef <FILE NAME>_H in upper case "
                   "(test.h : TEST_H), followed by #define with the same "
                   "name." },
+                { "Casts (C)", "No explicit cast." },
+                { "Globals (C)",
+                  "Global variables start with g_ ; at most 1 exported global "
+                  "variable per .c file." },
+                { "Exports (C)",
+                  "At most 10 exported (non static) functions per .c file." },
+                { "Prototypes (C)",
+                  "(void) when there is no argument ; the prototype of an "
+                  "exported function is in a header, not in a .c file." },
+                { "Names (C)",
+                  "File and function names match [a-z][a-z0-9_]* ; macro "
+                  "names are in upper case and macro arguments in title case "
+                  "(Left)." },
+                { "Includes (C)",
+                  "Only headers are included, in this order : header of the "
+                  "file, system headers, local headers (blocks separated by an "
+                  "empty line, sorted alphabetically)." },
+                { "Keywords (C)",
+                  "No goto, no asm, no gcc builtin (__builtin_*), no digraph "
+                  "or trigraph." },
+                { "typedef (C)",
+                  "Only for function pointers (structures and unions are not "
+                  "aliased)." },
+                { "enum (C)", "The last enumerator ends with a comma." },
                 { "<path>", "Folder to check (default: the current folder)." },
                 { "-f, --fix",
                   "Fix what can be fixed without asking, report the rest." },
@@ -331,6 +358,20 @@ static const Command COMMANDS[] = {
       .rows = { { NULL, NULL } },
       .examples = { "jarvis erase", NULL } },
 
+    { .name = "update",
+      .shortcut = "u",
+      .group = "Maintenance",
+      .usage = "jarvis update",
+      .summary = "Update Jarvis to the latest version.",
+      .details =
+          "Downloads the installer and runs it again, like the first "
+          "installation : Jarvis is rebuilt and reinstalled over the previous "
+          "version. Your data (session, settings, root repository) is kept. "
+          "If the download fails, nothing is changed.",
+      .rows_title = "Arguments",
+      .rows = { { NULL, NULL } },
+      .examples = { "jarvis update", "j u", NULL } },
+
     { .name = "uninstall",
       .shortcut = NULL,
       .group = "Maintenance",
@@ -346,7 +387,7 @@ static const Command COMMANDS[] = {
       .shortcut = NULL,
       .group = "Others",
       .usage = "jarvis help counter",
-      .summary = "How the Jarvis user counter works.",
+      .summary = "How the Jarvis user counter works. [Warning] Type \'jarvis help counter\'",
       .details =
           "Jarvis counts its users with the stars of its GitHub repository "
           "(MBaptisteM/Jarvis). The first time you use Jarvis in a terminal "

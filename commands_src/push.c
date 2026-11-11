@@ -172,7 +172,8 @@ static char *__KeywordValue(char *arg, const char *keyword)
         return NULL;
 
     for (size_t i = 0; i < length; i++)
-        if (tolower((unsigned char)arg[i]) != tolower((unsigned char)keyword[i]))
+        if (tolower((unsigned char)arg[i])
+            != tolower((unsigned char)keyword[i]))
             return NULL;
 
     char *rest = arg + length;

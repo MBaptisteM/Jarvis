@@ -3,9 +3,10 @@
 static char *ResolveShortcut(char *command)
 {
     static char *shortcuts[][2] = {
-        { "a", "auth" },  { "c", "clone" }, { "pl", "pull" },
-        { "ps", "push" }, { "f", "find" },  { "g", "go" },
-        { "h", "help" },  { "t", "tidy" },  { "cu", "custom" },
+        { "a", "auth" },    { "c", "clone" }, { "pl", "pull" },
+        { "ps", "push" },   { "f", "find" },  { "g", "go" },
+        { "h", "help" },    { "t", "tidy" },  { "cu", "custom" },
+        { "fm", "format" }, {"u", "update"},
     };
 
     for (size_t i = 0; i < sizeof(shortcuts) / sizeof(shortcuts[0]); i++)

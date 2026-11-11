@@ -8,6 +8,10 @@ static const char *IGNORED_FOLDERS[] = { ".git", ".git.jarvis-tmp",
 static const char *SOURCE_EXTENSIONS[] = { ".c",   ".h",  ".cc",  ".cpp",
                                            ".cxx", ".hh", ".hpp", ".hxx" };
 
+// Files checked with the rules of the C coding style
+static const char *C_SOURCE_EXTENSIONS[] = { ".c" };
+static const char *C_HEADER_EXTENSIONS[] = { ".h" };
+
 // Files that are headers (include guard checked)
 static const char *HEADER_EXTENSIONS[] = { ".h", ".hh", ".hpp", ".hxx" };
 
@@ -915,7 +919,649 @@ static int __CountCodeLines(const Source *src, size_t open, size_t close)
     return count;
 }
 
-static void __CheckFunctions(const Source *src, ProblemList *list)
+// Rules of the C coding style that clang-format can't check (only for the .c
+// and .h files). Nothing here is fixed automatically : renaming or rewriting
+// code needs a decision of the author.
+
+typedef struct
+{
+    int is_source; // .c file : the exported symbols are counted
+    int is_header;
+    ProblemList *list;
+    size_t exported_functions;
+    size_t exported_variables;
+} CStyle;
+
+static const char *TYPE_WORDS[] = { "void",     "char",     "short",
+                                    "int",      "long",     "float",
+                                    "double",   "signed",   "unsigned",
+                                    "const",    "volatile", "_Bool",
+                                    "struct",   "union",    "enum" };
+
+static const char *INCLUDE_EXTENSIONS[] = { ".h", ".cxx" };
+
+// [a-z][a-z0-9_]*
+static int __IsLowerName(const char *name)
+{
+    if (!islower((unsigned char)name[0]))
+        return 0;
+    for (size_t i = 1; name[i] != '\0'; i++)
+        if (!islower((unsigned char)name[i]) && !isdigit((unsigned char)name[i])
+            && name[i] != '_')
+            return 0;
+    return 1;
+}
+
+static int __IsWord(const char *s, size_t length, const char *word)
+{
+    return strlen(word) == length && strncmp(s, word, length) == 0;
+}
+
+static int __IsTagWord(const char *s, size_t length)
+{
+    return __IsWord(s, length, "struct") || __IsWord(s, length, "union")
+        || __IsWord(s, length, "enum");
+}
+
+// Type keyword, or a name like size_t / uint8_t
+static int __IsTypeWord(const char *s, size_t length)
+{
+    for (size_t i = 0; i < sizeof(TYPE_WORDS) / sizeof(TYPE_WORDS[0]); i++)
+        if (__IsWord(s, length, TYPE_WORDS[i]))
+            return 1;
+    return length > 2 && s[length - 2] == '_' && s[length - 1] == 't';
+}
+
+// Is "int", "char *", "struct foo *", "size_t"... the whole content ?
+static int __IsTypeName(const char *content)
+{
+    int words = 0;
+    int after_tag = 0; // the word follows struct / union / enum
+    const char *p = content;
+    while (*p != '\0')
+    {
+        if (isspace((unsigned char)*p) || (*p == '*' && words > 0))
+        {
+            p++;
+            continue;
+        }
+        size_t length = 0;
+        while (__IsIdentChar(p[length]))
+            length++;
+        if (length == 0 || !(after_tag || __IsTypeWord(p, length)))
+            return 0;
+        after_tag = __IsTagWord(p, length);
+        words++;
+        p += length;
+    }
+    return words > 0;
+}
+
+// Can the parentheses at [open, close] be a cast ? Not after a name (function
+// call, sizeof, if...) and followed by something to convert.
+static int __IsCastContext(const char *s, size_t length, size_t open,
+                           size_t close)
+{
+    size_t k = open;
+    while (k > 0 && isspace((unsigned char)s[k - 1]))
+        k--;
+    if (k > 0 && (s[k - 1] == ')' || s[k - 1] == ']'))
+        return 0;
+    if (k > 0 && __IsIdentChar(s[k - 1]))
+    {
+        size_t start = k;
+        while (start > 0 && __IsIdentChar(s[start - 1]))
+            start--;
+        if (!__IsWord(s + start, k - start, "return"))
+            return 0;
+    }
+
+    size_t m = close + 1;
+    while (m < length && isspace((unsigned char)s[m]))
+        m++;
+    if (m >= length)
+        return 0;
+    return __IsIdentChar(s[m]) || strchr("(*&-+!~\"'", s[m]) != NULL;
+}
+
+// cast : the number of explicit casts is 0
+static void __CheckCasts(const Source *src, ProblemList *list)
+{
+    const char *s = src->clean;
+    for (size_t i = 0; i < src->length; i++)
+    {
+        if (s[i] != '(')
+            continue;
+
+        size_t close = i + 1;
+        while (close < src->length && strchr(")(;{}", s[close]) == NULL)
+            close++;
+        if (close >= src->length || s[close] != ')' || close - i > 128)
+            continue;
+
+        char content[130];
+        memcpy(content, s + i + 1, close - i - 1);
+        content[close - i - 1] = '\0';
+        if (__IsTypeName(content) && __IsCastContext(s, src->length, i, close))
+            __Add(list, __LineOf(src, i) + 1,
+                  "explicit cast (%s) is not allowed", __Trim(content));
+    }
+}
+
+// cpp.digraphs : digraphs and trigraphs must not be used
+static void __CheckDigraphs(const Source *src, ProblemList *list)
+{
+    const char *s = src->comment_free;
+    size_t reported = 0;
+    for (size_t i = 0; i + 1 < src->length; i++)
+    {
+        int digraph = (s[i] == '<'
+                       && (s[i + 1] == '%'
+                           || (s[i + 1] == ':'
+                               && !(i + 2 < src->length && s[i + 2] == ':'))))
+            || (s[i] == '%' && (s[i + 1] == '>' || s[i + 1] == ':'))
+            || (s[i] == ':' && s[i + 1] == '>');
+        int trigraph = s[i] == '?' && s[i + 1] == '?' && i + 2 < src->length
+            && strchr("=/'()!<>-", s[i + 2]) != NULL;
+
+        size_t line = __LineOf(src, i) + 1;
+        if ((digraph || trigraph) && line != reported)
+        {
+            __Add(list, line, "digraphs and trigraphs must not be used");
+            reported = line;
+        }
+    }
+}
+
+// name.case : file names
+static void __CheckFileName(const char *name, ProblemList *list)
+{
+    char stem[256];
+    const char *dot = strrchr(name, '.');
+    size_t length = dot != NULL ? (size_t)(dot - name) : strlen(name);
+    if (length >= sizeof(stem))
+        length = sizeof(stem) - 1;
+    memcpy(stem, name, length);
+    stem[length] = '\0';
+
+    if (!__IsLowerName(stem))
+        __Add(list, 1, "file name \"%s\" must match [a-z][a-z0-9_]*", name);
+}
+
+// keyword.goto, stat.asm, gcc.builtins, name.struct (typedef), enum.comma
+
+// name.struct : typedef is only for function pointers
+static void __CheckTypedef(const Source *src, ProblemList *list, size_t start,
+                           size_t from)
+{
+    const char *s = src->clean;
+    int depth = 0;
+    int pointer = 0;
+    for (size_t k = from; k < src->length; k++)
+    {
+        if (s[k] == '{')
+            depth++;
+        else if (s[k] == '}' && depth > 0)
+            depth--;
+        else if (s[k] == ';' && depth == 0)
+            break;
+        else if (s[k] == '(' && depth == 0)
+        {
+            size_t n = k + 1;
+            while (n < src->length && isspace((unsigned char)s[n]))
+                n++;
+            pointer |= n < src->length && s[n] == '*';
+        }
+    }
+
+    if (!pointer)
+        __Add(list, __LineOf(src, start) + 1,
+              "typedef must only be used for function pointers (structures and "
+              "unions must not be aliased)");
+}
+
+// enum.comma : the last enumerator ends with a comma
+static void __CheckEnum(const Source *src, ProblemList *list, size_t from)
+{
+    const char *s = src->clean;
+    size_t k = from;
+    while (k < src->length && strchr("{;(),=", s[k]) == NULL)
+        k++;
+    if (k >= src->length || s[k] != '{')
+        return;
+
+    size_t close = k + 1;
+    int depth = 1;
+    while (close < src->length && depth > 0)
+    {
+        depth += s[close] == '{';
+        depth -= s[close] == '}';
+        close++;
+    }
+    if (depth != 0)
+        return;
+    close--; // the closing brace
+
+    size_t last = close;
+    while (last > k + 1 && isspace((unsigned char)s[last - 1]))
+        last--;
+    if (last > k + 1 && s[last - 1] != ',')
+        __Add(list, __LineOf(src, close) + 1,
+              "the last enumerator must be followed by a comma");
+}
+
+static void __CheckWord(const Source *src, ProblemList *list, size_t start,
+                        size_t end)
+{
+    const char *word = src->clean + start;
+    size_t length = end - start;
+    size_t line = __LineOf(src, start) + 1;
+
+    if (__IsWord(word, length, "goto"))
+        __Add(list, line, "the goto statement must not be used");
+    else if (__IsWord(word, length, "asm") || __IsWord(word, length, "__asm")
+             || __IsWord(word, length, "__asm__"))
+        __Add(list, line, "the asm declaration must not be used");
+    else if (length > 10 && strncmp(word, "__builtin_", 10) == 0)
+        __Add(list, line, "gcc builtin %.*s must not be used", (int)length,
+              word);
+    else if (__IsWord(word, length, "typedef"))
+        __CheckTypedef(src, list, start, end);
+    else if (__IsWord(word, length, "enum"))
+        __CheckEnum(src, list, end);
+}
+
+static void __CheckTokens(const Source *src, ProblemList *list)
+{
+    const char *s = src->clean;
+    size_t i = 0;
+    while (i < src->length)
+    {
+        int starts_word = isalpha((unsigned char)s[i]) || s[i] == '_';
+        if (!starts_word || (i > 0 && __IsIdentChar(s[i - 1])))
+        {
+            i++;
+            continue;
+        }
+
+        size_t end = i;
+        while (end < src->length && __IsIdentChar(s[end]))
+            end++;
+        __CheckWord(src, list, i, end);
+        i = end;
+    }
+}
+
+// Preprocessor : #include and #define
+
+typedef struct
+{
+    int seen;
+    int rank; // 0 : header of the file | 1 : system | 2 : local
+    size_t line;
+    char target[256];
+} LastInclude;
+
+// Keyword and arguments of the preprocessor directive of a line (copy of the
+// text of the file in "buffer")
+static char *__Directive(const Source *src, size_t l, char *buffer, size_t size,
+                         char *keyword)
+{
+    size_t start = src->line_start[l];
+    size_t length = src->line_start[l + 1] - start;
+    if (length >= size)
+        length = size - 1;
+    memcpy(buffer, src->text + start, length);
+    buffer[length] = '\0';
+
+    keyword[0] = '\0';
+    char *p = strchr(buffer, '#');
+    if (p == NULL)
+        return buffer;
+
+    p++;
+    while (isspace((unsigned char)*p))
+        p++;
+    size_t k = 0;
+    while (isalpha((unsigned char)*p) && k < 15)
+        keyword[k++] = *p++;
+    keyword[k] = '\0';
+    return __Trim(p);
+}
+
+// cpp.include.filetype and cpp.include.order : the header of the file, then the
+// system headers, then the local ones, in blocks separated by an empty line and
+// sorted alphabetically
+static void __CheckInclude(const char *rest, size_t line, const char *own,
+                           LastInclude *last, ProblemList *list)
+{
+    char close = rest[0] == '<' ? '>' : rest[0] == '"' ? '"' : '\0';
+    const char *end = close == '\0' ? NULL : strchr(rest + 1, close);
+    if (end == NULL || end == rest + 1 || (size_t)(end - rest) > 255)
+        return;
+
+    char target[256];
+    memcpy(target, rest + 1, (size_t)(end - rest - 1));
+    target[end - rest - 1] = '\0';
+
+    size_t extensions = sizeof(INCLUDE_EXTENSIONS) / sizeof(char *);
+    if (!__EndsWithOneOf(target, INCLUDE_EXTENSIONS, extensions))
+        __Add(list, line, "included file \"%s\" must be a header (.h)", target);
+
+    const char *base = strrchr(target, '/');
+    base = base != NULL ? base + 1 : target;
+    int rank = close == '>' ? 1 : (own != NULL && strcmp(base, own) == 0 ? 0 : 2);
+
+    if (last->seen && rank < last->rank)
+        __Add(list, line,
+              "include order : header of the file, system headers, then local "
+              "headers (\"%s\" is misplaced)",
+              target);
+    else if (last->seen && rank > last->rank && line == last->line + 1)
+        __Add(list, line, "include blocks must be separated by an empty line");
+    else if (last->seen && rank == last->rank && line == last->line + 1
+             && strcasecmp(target, last->target) < 0)
+        __Add(list, line,
+              "includes must be sorted alphabetically (\"%s\" before \"%s\")",
+              target, last->target);
+
+    last->seen = 1;
+    last->rank = rank;
+    last->line = line;
+    snprintf(last->target, sizeof(last->target), "%s", target);
+}
+
+// name.case.macro : macro arguments are in title case (Left, Right)
+static void __CheckMacroArgument(char *argument, size_t line,
+                                 ProblemList *list)
+{
+    char *dots = strstr(argument, "...");
+    if (dots != NULL)
+        *dots = '\0';
+    argument = __Trim(argument);
+    if (argument[0] == '\0')
+        return;
+
+    int has_lower = 0;
+    for (size_t i = 0; argument[i] != '\0'; i++)
+        has_lower |= islower((unsigned char)argument[i]) != 0;
+
+    if (!isupper((unsigned char)argument[0])
+        || (strlen(argument) > 1 && !has_lower))
+        __Add(list, line,
+              "macro argument \"%s\" must be in title case (ex : Left)",
+              argument);
+}
+
+// name.case.macro : macro names are in upper case
+static void __CheckMacro(char *rest, size_t line, ProblemList *list)
+{
+    size_t length = 0;
+    int upper = 1;
+    while (__IsIdentChar(rest[length]))
+        upper &= islower((unsigned char)rest[length++]) == 0;
+    if (length == 0)
+        return;
+
+    if (!upper)
+        __Add(list, line, "macro name \"%.*s\" must be upper case", (int)length,
+              rest);
+    if (rest[length] != '(' || strchr(rest, ')') == NULL)
+        return;
+
+    char *params = rest + length + 1;
+    *strchr(params, ')') = '\0';
+    char *save = NULL;
+    for (char *token = strtok_r(params, ",", &save); token != NULL;
+         token = strtok_r(NULL, ",", &save))
+        __CheckMacroArgument(token, line, list);
+}
+
+static void __CheckDirectives(const Source *src, const char *name,
+                              ProblemList *list)
+{
+    char own[300] = "";
+    const char *own_header = NULL;
+    if (__EndsWithOneOf(name, (const char *[]){ ".c" }, 1))
+    {
+        snprintf(own, sizeof(own), "%.*s.h", (int)(strlen(name) - 2), name);
+        own_header = own;
+    }
+
+    LastInclude last = { 0, 0, 0, "" };
+    for (size_t l = 0; l < src->line_count; l++)
+    {
+        if (src->preproc[l] != 1)
+            continue;
+
+        char buffer[1024];
+        char keyword[16];
+        char *rest = __Directive(src, l, buffer, sizeof(buffer), keyword);
+        if (strcmp(keyword, "include") == 0)
+            __CheckInclude(rest, l + 1, own_header, &last, list);
+        else if (strcmp(keyword, "define") == 0)
+            __CheckMacro(rest, l + 1, list);
+    }
+}
+
+// Declarations at the top level : global variables and prototypes
+
+// Identifier ending at s[end] (exclusive) : its length, "start" is its offset
+static size_t __IdentBefore(const char *s, size_t end, size_t *start)
+{
+    size_t k = end;
+    while (k > 0 && __IsIdentChar(s[k - 1]))
+        k--;
+    *start = k;
+    return end - k;
+}
+
+// Text of a declaration : the content of the braces is removed ("{}") and the
+// blanks are collapsed. malloc'd.
+static char *__Flatten(const char *text, size_t length)
+{
+    char *out = malloc(length + 1);
+    if (out == NULL)
+        err(EXIT_FAILURE, "malloc");
+
+    size_t n = 0;
+    int depth = 0;
+    for (size_t i = 0; i < length; i++)
+    {
+        char c = text[i];
+        if (c == '{' && depth++ == 0)
+            out[n++] = c;
+        else if (c == '}' && depth > 0 && --depth == 0)
+            out[n++] = c;
+        else if (depth == 0 && c != '{' && c != '}' && !isspace((unsigned char)c))
+            out[n++] = c;
+        else if (depth == 0 && isspace((unsigned char)c) && n > 0
+                 && out[n - 1] != ' ')
+            out[n++] = ' ';
+    }
+    while (n > 0 && out[n - 1] == ' ')
+        n--;
+    out[n] = '\0';
+    return out;
+}
+
+// name.prefix.global, export.other : a global variable
+static void __ReportGlobal(CStyle *ctx, const char *text, const char *name,
+                           size_t line)
+{
+    if (strncmp(name, "g_", 2) != 0)
+        __Add(ctx->list, line, "global variable \"%s\" must start with g_",
+              name);
+    else if (!__IsLowerName(name))
+        __Add(ctx->list, line, "name \"%s\" must match [a-z][a-z0-9_]*", name);
+
+    size_t length = strlen(text);
+    int hidden = __HasWord(text, length, "static")
+        || __HasWord(text, length, "extern");
+    if (ctx->is_source && !hidden
+        && ++ctx->exported_variables > TIDY_MAX_EXPORTED_VARIABLES)
+        __Add(ctx->list, line,
+              "exported global variable \"%s\" : a file can export at most %d "
+              "non-function symbol",
+              name, TIDY_MAX_EXPORTED_VARIABLES);
+}
+
+// Name of the first variable declared by "int *p[3] = ..." (text up to the "="
+// excluded), NULL when the declaration declares no variable (struct foo, ...)
+static int __VariableName(const char *text, size_t end, char *name, size_t size)
+{
+    for (size_t i = 0; i < end; i++)
+        if (text[i] == ',')
+            end = i;
+
+    for (;;)
+    {
+        while (end > 0 && text[end - 1] == ' ')
+            end--;
+        if (end == 0 || text[end - 1] != ']')
+            break;
+        while (end > 0 && text[end - 1] != '[')
+            end--;
+        end -= end > 0;
+    }
+
+    size_t start;
+    size_t length = __IdentBefore(text, end, &start);
+    size_t before = start;
+    while (before > 0 && text[before - 1] == ' ')
+        before--;
+    if (length == 0 || length >= size || before == 0)
+        return 0;
+
+    size_t tag_start;
+    size_t tag = __IdentBefore(text, before, &tag_start);
+    if (tag > 0 && __IsTagWord(text + tag_start, tag))
+        return 0;
+
+    memcpy(name, text + start, length);
+    name[length] = '\0';
+    return 1;
+}
+
+// A prototype : fun.proto.layout (exported prototypes are in headers) and
+// fun.proto.void. A function pointer variable is a global variable.
+static void __CheckPrototype(CStyle *ctx, const char *text, const char *paren,
+                             size_t line)
+{
+    const char *after = paren + 1;
+    while (*after == ' ')
+        after++;
+
+    char name[128];
+    if (*after == '*')
+    {
+        while (*after == '*' || *after == ' ')
+            after++;
+        size_t length = 0;
+        while (__IsIdentChar(after[length]) && length < sizeof(name) - 1)
+        {
+            name[length] = after[length];
+            length++;
+        }
+        name[length] = '\0';
+        if (length > 0)
+            __ReportGlobal(ctx, text, name, line);
+        return;
+    }
+
+    size_t start;
+    size_t length = __IdentBefore(text, (size_t)(paren - text), &start);
+    size_t before = start;
+    while (before > 0 && text[before - 1] == ' ')
+        before--;
+    if (length == 0 || length >= sizeof(name) || before == 0)
+        return; // macro call, not a prototype
+
+    memcpy(name, text + start, length);
+    name[length] = '\0';
+    if (*after == ')')
+        __Add(ctx->list, line,
+              "prototype of \"%s\" must use (void) when it takes no argument",
+              name);
+    if (ctx->is_source && !__HasWord(text, strlen(text), "static"))
+        __Add(ctx->list, line,
+              "prototype of the exported function \"%s\" must be in a header, "
+              "not in a source file",
+              name);
+}
+
+static void __CheckTopStatement(CStyle *ctx, const Source *src, size_t start,
+                                size_t end)
+{
+    size_t first = start;
+    while (first < end && isspace((unsigned char)src->clean[first]))
+        first++;
+    if (first >= end)
+        return;
+
+    char *text = __Flatten(src->clean + first, end - first);
+    const char *paren = strchr(text, '(');
+    const char *equal = strchr(text, '=');
+    size_t line = __LineOf(src, first) + 1;
+
+    if (__HasWord(text, strlen(text), "typedef"))
+    {
+        free(text);
+        return;
+    }
+
+    char name[128];
+    if (paren != NULL && (equal == NULL || paren < equal))
+        __CheckPrototype(ctx, text, paren, line);
+    else if (__VariableName(text, equal != NULL ? (size_t)(equal - text)
+                                                : strlen(text),
+                            name, sizeof(name)))
+        __ReportGlobal(ctx, text, name, line);
+
+    free(text);
+}
+
+// fun.proto.void, name.case, export.fun : head of a function definition
+static void __CheckFunctionHead(CStyle *ctx, const char *head, size_t length,
+                                size_t name_offset, const Brace *brace)
+{
+    if (strchr(brace->name, ':') == NULL && strcmp(brace->name, "?") != 0
+        && !__IsLowerName(brace->name))
+        __Add(ctx->list, brace->head_line,
+              "function name \"%s\" must match [a-z][a-z0-9_]*", brace->name);
+
+    const char *paren = memchr(head + name_offset, '(', length - name_offset);
+    if (paren != NULL)
+    {
+        const char *after = paren + 1;
+        while (isspace((unsigned char)*after))
+            after++;
+        if (*after == ')')
+            __Add(ctx->list, brace->head_line,
+                  "function \"%s\" must use (void) when it takes no argument",
+                  brace->name);
+    }
+
+    if (ctx->is_source && !__HasWord(head, length, "static")
+        && ++ctx->exported_functions == TIDY_MAX_EXPORTED_FUNCTIONS + 1)
+        __Add(ctx->list, brace->head_line,
+              "more than %d exported functions in this file (\"%s\" is the "
+              "%dth) : move some of them or make them static",
+              TIDY_MAX_EXPORTED_FUNCTIONS, brace->name,
+              TIDY_MAX_EXPORTED_FUNCTIONS + 1);
+}
+
+static void __CheckCStyle(const Source *src, const char *name, CStyle *ctx)
+{
+    __CheckFileName(name, ctx->list);
+    __CheckDirectives(src, name, ctx->list);
+    __CheckDigraphs(src, ctx->list);
+    __CheckTokens(src, ctx->list);
+    __CheckCasts(src, ctx->list);
+}
+
+static void __CheckFunctions(const Source *src, ProblemList *list,
+                            CStyle *ctx)
 {
     const char *s = src->clean;
     Brace *stack = NULL;
@@ -923,6 +1569,7 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
     size_t capacity = 0;
     size_t opaque = 0; // braces on the stack that are not "transparent"
     size_t statement_start = 0;
+    size_t decl_start = 0; // start of the declaration at the top level
 
     for (size_t i = 0; i < src->length; i++)
     {
@@ -944,6 +1591,10 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
                         __Add(list, brace.head_line,
                               "function \"%s\" has %d arguments (max %d)",
                               brace.name, args, TIDY_MAX_ARGS);
+                    if (ctx != NULL)
+                        __CheckFunctionHead(ctx, s + statement_start,
+                                            i - statement_start, name_offset,
+                                            &brace);
                 }
             }
 
@@ -959,6 +1610,8 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
             }
             stack[depth++] = brace;
             statement_start = i + 1;
+            if (brace.kind == BRACE_TRANSPARENT)
+                decl_start = i + 1;
         }
         else if (s[i] == '}')
         {
@@ -967,6 +1620,8 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
                 Brace brace = stack[--depth];
                 if (brace.kind != BRACE_TRANSPARENT)
                     opaque--;
+                if (brace.kind != BRACE_OTHER)
+                    decl_start = i + 1;
 
                 if (brace.kind == BRACE_FUNCTION)
                 {
@@ -984,7 +1639,12 @@ static void __CheckFunctions(const Source *src, ProblemList *list)
             statement_start = i + 1;
         }
         else if (s[i] == ';' && opaque == 0)
+        {
+            if (ctx != NULL)
+                __CheckTopStatement(ctx, src, decl_start, i);
             statement_start = i + 1;
+            decl_start = i + 1;
+        }
     }
 
     free(stack);
@@ -1184,7 +1844,15 @@ static void __AnalyzeFile(const char *path, const char *name)
         int is_header = __HeaderGuard(name, guard, sizeof(guard));
 
         __CheckPreprocessor(&src, is_header ? guard : NULL, &list, NULL);
-        __CheckFunctions(&src, &list);
+
+        // The rules of the C coding style only apply to .c and .h files
+        CStyle style = { __EndsWithOneOf(name, C_SOURCE_EXTENSIONS, 1),
+                         is_header && __EndsWithOneOf(name, C_HEADER_EXTENSIONS, 1),
+                         &list, 0, 0 };
+        int is_c = style.is_source || style.is_header;
+        __CheckFunctions(&src, &list, is_c ? &style : NULL);
+        if (is_c)
+            __CheckCStyle(&src, name, &style);
     }
 
     if (list.count > 0)

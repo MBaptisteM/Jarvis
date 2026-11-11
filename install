@@ -202,6 +202,12 @@ else
 fi
 
 mkdir -p "$BIN_PATH" "$LIB_PATH/cmd" "$COMP_PATH" "$JARVIS_DATA_PATH/subject"
+# Remove the old files first : overwriting a running program fails with
+# "Text file busy" (ex: "jarvis update"), while removing it is allowed
+rm -f "$BIN_PATH/jarvis"
+for command_file in commands/*; do
+    rm -rf "$LIB_PATH/cmd/$(basename "$command_file")"
+done
 cp bin/jarvis "$BIN_PATH/"
 cp -R commands/. "$LIB_PATH/cmd/"
 cp -R subject/. "$JARVIS_DATA_PATH/subject/"
@@ -322,4 +328,5 @@ ui_panel success "Installation complete" \
     "Data directory: $JARVIS_DATA_PATH" \
     "Added ~/.local/bin to PATH and enabled shell navigation in $startup_file; this takes effect in new shells." \
     "$shortcut_status"
+
 

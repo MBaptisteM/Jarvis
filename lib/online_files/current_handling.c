@@ -13,7 +13,6 @@ int IsCurrentKeyword(const char *argument)
         || strcasecmp(argument, "curr") == 0;
 }
 
-
 // Spinner : "<frame> <label>" redrawn on one line while the pages are loaded,
 // instead of one panel per downloaded page. Without a terminal, the label is
 // only written once.

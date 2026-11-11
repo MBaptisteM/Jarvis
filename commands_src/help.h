@@ -18,6 +18,7 @@
 #define COMMAND_PULL "pull"
 #define COMMAND_FIND "find"
 #define COMMAND_ERASE "erase"
+#define COMMAND_UPDATE "update"
 
 void Help(void);
 void HelpClone(void);
@@ -26,5 +27,6 @@ void HelpAuth(void);
 void HelpPull(void);
 void HelpFind(void);
 void HelpErase(void);
+void HelpUpdate(void);
 void HelpGo(void);
 void HelpCustom(void);

@@ -20,6 +20,8 @@
 
 #define TIDY_MAX_ARGS 4
 #define TIDY_MAX_LINES 30
+#define TIDY_MAX_EXPORTED_FUNCTIONS 10
+#define TIDY_MAX_EXPORTED_VARIABLES 1
 
 // Check only : nothing is modified. Returns the number of problems found.
 int TidyTree(const char *folder);
