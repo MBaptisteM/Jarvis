@@ -1,8 +1,16 @@
 #include "push.h"
 
+#include <fcntl.h>
+#include <sys/wait.h>
+
 #include "choice.h"
 #include "counter.h"
 #include "tidy_handler.h"
+
+// The root push runs in a child process : its exit code is its status plus
+// this base, so that an exit code of err()/errx() (1) is never taken for a
+// status.
+#define ROOT_STATUS_BASE 100
 
 int ReadRootPath(char **value);
 int PushRepoStatus(char *repo_path, char *commit_name, char *tag);
@@ -36,6 +44,147 @@ static int __PushRootOnly(char *commit_name)
 {
     int staging_failed = AddRepoRoot() != EXIT_SUCCESS;
     return PushRepoRootStatus(commit_name, staging_failed);
+}
+
+// Root push running next to the push of the repository
+struct root_push
+{
+    pid_t pid;
+    char *log_path; // everything the root push printed
+};
+
+// Has this repository at least one commit ? (an empty one cannot be pushed
+// at the same time as the root : the root hides its .git while staging)
+static int __HasInitialCommit(const char *path)
+{
+    size_t size = strlen(path) + 128;
+    char *command = malloc(size);
+    if (command == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(command, size,
+             "git -C \"%s\" rev-parse --quiet --verify HEAD >/dev/null 2>&1",
+             path);
+
+    int has_commit = system(command) == 0;
+    free(command);
+    return has_commit;
+}
+
+// Start the push of the root repository in a child process, silently : its
+// output (jarvis and git) goes to a temporary file, shown only on error.
+// 0 if started, -1 otherwise (the caller then pushes the root normally).
+static int __StartRootPush(char *commit_name, struct root_push *job)
+{
+    const char *dir = getenv("TMPDIR");
+    if (dir == NULL || dir[0] == '\0')
+        dir = "/tmp";
+
+    size_t size = strlen(dir) + sizeof("/jarvis-push-XXXXXX");
+    job->log_path = malloc(size);
+    if (job->log_path == NULL)
+        err(EXIT_FAILURE, "malloc");
+    snprintf(job->log_path, size, "%s/jarvis-push-XXXXXX", dir);
+
+    int log_fd = mkstemp(job->log_path);
+    if (log_fd < 0)
+    {
+        free(job->log_path);
+        return -1;
+    }
+
+    // Nothing waiting in the buffers must be written twice
+    fflush(NULL);
+
+    job->pid = fork();
+    if (job->pid < 0)
+    {
+        close(log_fd);
+        remove(job->log_path);
+        free(job->log_path);
+        return -1;
+    }
+
+    if (job->pid == 0)
+    {
+        // Not the same input as the push of the repository running next to it
+        int null_fd = open("/dev/null", O_RDONLY);
+        if (null_fd >= 0)
+        {
+            dup2(null_fd, STDIN_FILENO);
+            close(null_fd);
+        }
+        dup2(log_fd, STDOUT_FILENO);
+        dup2(log_fd, STDERR_FILENO);
+        close(log_fd);
+
+        int status = __PushRootOnly(commit_name);
+        fflush(NULL);
+        _exit(ROOT_STATUS_BASE + status);
+    }
+
+    close(log_fd);
+    return 0;
+}
+
+// Wait for the root push. Its output is shown only if it did not succeed.
+static int __FinishRootPush(struct root_push *job)
+{
+    int wait_status = 0;
+    int status = -1; // not pushed
+    if (waitpid(job->pid, &wait_status, 0) >= 0 && WIFEXITED(wait_status)
+        && WEXITSTATUS(wait_status) >= ROOT_STATUS_BASE)
+        status = WEXITSTATUS(wait_status) - ROOT_STATUS_BASE;
+
+    if (__StatusToExit(status) != EXIT_SUCCESS)
+    {
+        FILE *log = fopen(job->log_path, "r");
+        if (log != NULL)
+        {
+            // Read the whole log (any size) so that it goes inside the warning
+            size_t capacity = 1024;
+            size_t length = 0;
+            char *output = malloc(capacity);
+            if (output == NULL)
+                err(EXIT_FAILURE, "malloc");
+
+            size_t count;
+            while ((count = fread(output + length, 1, capacity - length - 1,
+                                  log))
+                   > 0)
+            {
+                length += count;
+                if (capacity - length - 1 == 0)
+                {
+                    capacity *= 2;
+                    char *bigger = realloc(output, capacity);
+                    if (bigger == NULL)
+                        err(EXIT_FAILURE, "realloc");
+                    output = bigger;
+                }
+            }
+            output[length] = '\0';
+            fclose(log);
+
+            // Remove the trailing newlines
+            while (length > 0
+                   && (output[length - 1] == '\n' || output[length - 1] == '\r'))
+                output[--length] = '\0';
+
+            if (length == 0)
+                UiWarning("The root repository was not pushed correctly "
+                          "(no output, status : %d).",
+                          status);
+            else
+                UiWarning("The root repository was not pushed correctly, "
+                          "output :\n%s",
+                          output);
+            free(output);
+        }
+    }
+
+    remove(job->log_path);
+    free(job->log_path);
+    return status;
 }
 
 // Same folder ?
@@ -404,14 +553,25 @@ int main(int argc, char *argv[])
         }
     }
 
-    // 1. The repository itself. One after the other (not at the same time) :
-    // the root repository records the new commit of the repository, and
-    // hiding the .git of an empty nested repository while it is being pushed
-    // would break it.
-    int repo_status = PushRepoStatus(path, name_commit, tag);
+    // 1. The repository itself and the root repository, at the same time. The
+    // root push is silent (shown only on error). The root is pushed even if
+    // the repository push fails. An empty repository is pushed first and
+    // alone : the root hides its .git while staging, which would break it.
+    int repo_status;
+    int root_status;
+    struct root_push root_job;
 
-    // 2. The root repository, even if the first step failed
-    int root_status = __PushRootOnly(name_commit_root);
+    if (__HasInitialCommit(path)
+        && __StartRootPush(name_commit_root, &root_job) == 0)
+    {
+        repo_status = PushRepoStatus(path, name_commit, tag);
+        root_status = __FinishRootPush(&root_job);
+    }
+    else
+    {
+        repo_status = PushRepoStatus(path, name_commit, tag);
+        root_status = __PushRootOnly(name_commit_root);
+    }
 
     if (path_allocated)
         free(path);

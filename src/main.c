@@ -1,5 +1,18 @@
 #include "main.h"
 
+#include <string.h>
+#include <strings.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
+#define COMMAND_UPDATE "update"
+
+// File whose modification date is the date of the last update check (it is
+// written by the update command), and delay between two checks.
+#define LAST_CHECK_FILE ".jarvis_last_check"
+#define CHECK_DELAY (24 * 60 * 60)
+
 static char *ResolveShortcut(char *command)
 {
     static char *shortcuts[][2] = {
@@ -14,6 +27,47 @@ static char *ResolveShortcut(char *command)
             return shortcuts[i][1];
 
     return command;
+}
+
+// Has the last update check been done more than 24 hours ago (or never) ?
+// Set JARVIS_NO_AUTO_UPDATE to disable the automatic check.
+static int AutoUpdateDue(void)
+{
+    const char *home = getenv("HOME");
+    if (home == NULL || home[0] == '\0' || getenv("JARVIS_NO_AUTO_UPDATE"))
+        return 0;
+
+    char stamp_path[4096];
+    snprintf(stamp_path, sizeof(stamp_path), "%s/%s", home, LAST_CHECK_FILE);
+
+    struct stat info;
+    if (stat(stamp_path, &info) != 0)
+        return 1;
+
+    double elapsed = difftime(time(NULL), info.st_mtime);
+    return elapsed >= CHECK_DELAY || elapsed < 0;
+}
+
+// Hand over to "update --auto <jarvis> <arguments of the command>"
+static void RunAutoUpdate(int argc, char *argv[])
+{
+    char update_path[256];
+    snprintf(update_path, sizeof(update_path), "%s/%s", GetCommandPath(),
+             COMMAND_UPDATE);
+    if (access(update_path, X_OK) != 0)
+        return;
+
+    char **update_argv = calloc((size_t)argc + 3, sizeof(char *));
+    if (update_argv == NULL)
+        return;
+
+    update_argv[0] = COMMAND_UPDATE;
+    update_argv[1] = "--auto";
+    for (int i = 0; i < argc; i++)
+        update_argv[i + 2] = argv[i];
+
+    execv(update_path, update_argv);
+    free(update_argv);
 }
 
 // Main function that choose which command should be executed
@@ -42,6 +96,10 @@ int main(int argc, char *argv[])
     {
         // "c" -> "clone", "g" -> "go", ...
         argv[1] = ResolveShortcut(argv[1]);
+
+        // At most once a day, look for a newer version before the command
+        if (strcasecmp(argv[1], COMMAND_UPDATE) != 0 && AutoUpdateDue())
+            RunAutoUpdate(argc, argv);
 
         // "jarvis counter" alone -> "jarvis help counter"
         if (argc == 2 && strcasecmp(argv[1], "counter") == 0)
